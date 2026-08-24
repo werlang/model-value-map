@@ -445,7 +445,9 @@ window.LiveData = (function () {
 
   // ---------- merge live + snapshot ----------
   function merge(snapById, live) {
-    const board = new Map((live.tokenCost || []).map((r) => [r.model, r]));
+    // Re-validate even cached payloads at this boundary: localStorage content
+    // may predate a validation fix or be tampered with by other origins' bugs.
+    const board = new Map((live.tokenCost || []).filter(validBoardRow).map((r) => [r.model, r]));
     let snapFallbacks = 0;
 
     const models = (live.leaderboard || []).map((row) => {
@@ -468,7 +470,10 @@ window.LiveData = (function () {
         snapFallbacks++;
       }
 
-      const aaLive = (AA_SLUG[id] && live.aaIndex.get(AA_SLUG[id])) || live.aaIndex.get(normSlug(id)) || live.aaPages[id] || null;
+      const sane = (rec) => (!!rec && num(rec.intelligenceIndex) && rec.intelligenceIndex >= 0 ? rec : null);
+      const aaLive = sane((AA_SLUG[id] && live.aaIndex.get(AA_SLUG[id])) || null)
+        || sane(live.aaIndex.get(normSlug(id)))
+        || sane(live.aaPages[id]);
       let aa = null;
       if (aaLive) {
         const slugUsed = aaLive.slug || AA_SLUG[id] || normSlug(id);
@@ -484,18 +489,20 @@ window.LiveData = (function () {
         snapFallbacks++;
       }
 
-      const plot = ocCostPerM != null && !!aa;
+      const plot = num(ocCostPerM) && ocCostPerM > 0 && !!aa;
       const excludeReason = plot ? null
         : ocCostPerM == null
           ? ('No token cost published on OpenCode' + (aa ? '.' : '; not scored by Artificial Analysis either.'))
-          : 'Not scored on the Artificial Analysis Intelligence Index yet.';
+          : ocCostPerM <= 0
+            ? 'Free model (zero output rate) — cannot sit on a log-cost axis.'
+            : 'Not scored on the Artificial Analysis Intelligence Index yet.';
 
       return {
         id,
         label: (page && page.name) || snap.label || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         author: row.author,
         rank: row.rank,
-        weeklyTokensT: num(row.tokens) ? Math.round((row.tokens / 1000) * 100) / 100 : 0,
+        weeklyTokensT: num(row.tokens) && row.tokens > 0 ? Math.round((row.tokens / 1000) * 100) / 100 : 0,
         hue: hueFor(row.author, snapById, id),
         ocCostPerM,
         ocCost,
@@ -507,6 +514,16 @@ window.LiveData = (function () {
         excludeReason,
       };
     });
+
+    // A model OpenCode dropped from its leaderboard must not silently vanish:
+    // re-append its snapshot record so it stays visible (the UI's "Off the
+    // map" tray and toggles keep working off the same shape).
+    const seen = new Set(models.map((m) => m.id));
+    for (const snap of snapById.values()) {
+      if (seen.has(snap.id)) continue;
+      models.push({ ...snap });
+      snapFallbacks++;
+    }
 
     return { models, snapFallbacks };
   }
