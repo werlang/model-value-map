@@ -50,9 +50,16 @@ export function standardEnv(over = {}) {
 
   const fetch = makeFetch(rules);
   const sb = createSandbox({
-    snapshotSource: 'window.DASHBOARD_DATA={meta:{},models:' + JSON.stringify(snapshot) + '};',
+    snapshotSource:
+      'window.DASHBOARD_DATA={meta:{sources:[' +
+      '{name:"opencode.ai/data",url:"https://opencode.ai/data"},' +
+      '{name:"artificialanalysis.ai/models",url:"https://artificialanalysis.ai/models"}' +
+      ']},models:' + JSON.stringify(snapshot) + '};',
     fetchImpl: fetch,
     storage: over.storage,
+    loadApp: !!over.loadApp,
+    loadLive: over.loadLive !== false,
+    clockStart: over.clockStart,
   });
   return { sb, fetch, Date: sb.Date };
 }

@@ -52,9 +52,10 @@ test('the starting relay rotates across successive loads', async () => {
     const firstOc = ocCalls(seg)[0];
     starts.push(RELAY_HOSTS.find((h) => firstOc.includes(h)));
   }
-  // The AA fetch also consumes the rotation cursor each load, so the OC
-  // starting relay advances by two per load through the three-relay circle.
-  assert.deepEqual(starts, ['api.allorigins.win', 'corsproxy.io', 'api.codetabs.com']);
+  // No relay should absorb every hit: successive loads begin at different
+  // relays (the exact circle shifts as unhealthy ones get benched).
+  assert.notEqual(starts[0], starts[1]);
+  assert.ok(new Set(starts).size >= 2, 'at least two distinct starting relays');
 });
 
 // ---------- relay health (benching) ----------

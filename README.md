@@ -59,6 +59,20 @@ A few things worth knowing:
 | `data.js`    | Embedded snapshot — the fallback layer (retrieved 2026-08-23) |
 | `live.js`    | Live fetch, relay chain, parsers, merge, cache          |
 | `app.js`     | Scales, Pareto computation, SVG rendering, toggles      |
+| `tests/`     | Headless behavioral suite — runs on Node's built-in test runner |
+
+## Tests
+
+No dependencies, no build step — Node ≥ 18 runs them natively:
+
+```
+npm test
+```
+
+114 behavioral tests boot the real page headlessly and cover the risky edges:
+relay rotation/benching and 404 semantics, cache honesty (TTL, tampered
+payloads, outage fallbacks), inert-text parsing under hostile input, Pareto
+ties, XSS escaping through the DOM, and every status-stamp state.
 
 Curious about extending this with an AI agent? See [AGENTS.md](AGENTS.md).
 

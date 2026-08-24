@@ -33,6 +33,7 @@ These are design decisions, not accidents. Do not violate them without explicit 
 | `data.js`    | Snapshot joined from both sources; single source of fallback truth |
 | `live.js`    | Relay chain (direct → allorigins → codetabs → corsproxy), parsers, per-value merge, cache |
 | `app.js`     | Scales (log x, linear y), Pareto computation, SVG render, toggles, readout |
+| `tests/`     | Headless behavioral suite (`npm test`) — sandbox + stubs, no dependencies |
 
 When changing behavior, keep logic in the file that owns it (fetch/parse/merge → `live.js`; rendering/scales/UI → `app.js`).
 
@@ -51,19 +52,21 @@ When changing behavior, keep logic in the file that owns it (fetch/parse/merge �
 
 ## Validation
 
-There is no test suite and no CI. To verify changes:
+The test suite runs on Node's built-in runner (zero dependencies):
 
 ```
-python3 -m http.server 8000   # then open http://localhost:8000
+npm test                 # node --test "tests/*.test.js"
+npm run test:coverage    # same, with V8 coverage
 ```
 
-Check:
-
-1. No console errors on load.
-2. The header stamp cycles correctly: 🟢 live fetched · 🟠 partial (snapshot values used) · 🔴 snapshot only.
-3. Toggling models recomputes the dashed frontier; ⟳ forces a fresh fetch.
-4. Chart still renders with network throttled/offline (pure-snapshot path).
-5. Keyboard navigation reaches dots and the readout updates.
+The suite loads `data.js` / `live.js` / `app.js` inside a `vm` sandbox with
+stubbed browser globals (`fetch`, `localStorage`, `Worker`, DOM), so it
+exercises the real scripts headlessly — including relay ordering, cache
+honesty/TTL/tamper defense, inert-text parsing, merge fallback accounting,
+Pareto ties, and the render/stamp behavior of a booted page. `app.js` exposes
+pure helpers via `window.MVM_TEST` for direct unit assertions; nothing else in
+production code exists for testing's sake. CI: none yet — run `npm test`
+before pushing.
 
 ## Commits
 

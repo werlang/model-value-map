@@ -85,9 +85,14 @@ export class El {
 
   addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); }
   removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn); }
+  /** Dispatches on this element, then bubbles up through ancestors. */
   dispatch(type, ev = {}) {
     const event = { target: ev.target || this, type, ...ev };
-    (this.listeners[type] || []).forEach((fn) => fn(event));
+    let cur = this;
+    while (cur) {
+      (cur.listeners[type] || []).forEach((fn) => fn(event));
+      cur = cur === this ? this.parent : cur.parent;
+    }
     return event;
   }
 
@@ -110,16 +115,15 @@ export class El {
 
   /** right-to-left descendant-combinator match ("#id tbody", "[data-chip]") */
   matchesPath(parts) {
-    let i = parts.length - 1;
-    let cur = this;
-    while (cur) {
-      if (matchesSimple(cur, parts[i])) {
-        i--;
-        if (i < 0) return true;
-      }
+    // the final part must match THIS element; earlier parts match ancestors
+    if (!matchesSimple(this, parts[parts.length - 1])) return false;
+    let i = parts.length - 2;
+    let cur = this.parent;
+    while (cur && i >= 0) {
+      if (matchesSimple(cur, parts[i])) i--;
       cur = cur.parent;
     }
-    return false;
+    return i < 0;
   }
   querySelectorAll(sel) {
     const parts = sel.trim().split(/\s+/);
@@ -162,8 +166,9 @@ export function parseHtmlInto(parentEl, html) {
     addText(html.slice(last, m.index));
     last = TAG_RE.lastIndex;
     const [, rawTag, attrSrc] = m;
+    const isClose = m[0][1] === '/';
     const tag = rawTag.toLowerCase();
-    if (rawTag.startsWith('</')) {
+    if (isClose) {
       // close: pop until the matching open tag (tolerate strays)
       for (let i = stack.length - 1; i > 0; i--) {
         if (stack[i].tagName === tag) { stack.length = i; break; }

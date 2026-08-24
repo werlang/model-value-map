@@ -23,11 +23,13 @@ export function makeFetch(rules = []) {
     const rule = rules.find((r) => matches(r, url));
     if (!rule || rule.fail) throw new TypeError('Failed to fetch');
     if (rule.oncall) rule.oncall(url);
+    if (rule.hang) return new Promise(() => {}); // never settles — loading states
     const status = rule.status ?? 200;
     const body = typeof rule.body === 'function' ? rule.body() : (rule.body ?? '');
     return { ok: status >= 200 && status < 300, status, text: async () => body };
   };
   impl.calls = calls;
+  impl.rules = rules;
   /** URLs requested since the last drain() */
   impl.drain = () => { const c = [...calls]; calls.length = 0; return c; };
   return impl;

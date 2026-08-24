@@ -135,6 +135,21 @@ test('a record truncated mid-object (no matching brace) is skipped, siblings par
   assert.equal(byId(res.models, 'kimi-k3').aa.intelligenceIndex, 59.7);
 });
 
+test('a record with an unterminated nested object never closes (brace scan bail-out)', async () => {
+  const cov = tinyCoverage();
+  // payload opens nested objects that never close → matchBrace hits its scan
+  // limit and returns -1 → the record is skipped, siblings still parsed
+  const flightText = '{"id":"' + uuid() + '","slug":"abyss","meta":{"deep":{"deeper":1';
+  const raw = 'self.__next_f.push([1,' + JSON.stringify(flightText) + '])';
+  const html = aaIndexHtml([aaModel({ slug: 'kimi-k3' })], { extra: '\n' + flightPush(aaModel({ slug: 'mimo-v2-5-0424', intelligenceIndex: 38.04 })) + '\n' + raw });
+  const { res } = await run({
+    coverage: cov,
+    aaIndexRule: { test: /^https:\/\/artificialanalysis\.ai\/models$/, body: html },
+  });
+  assert.equal(byId(res.models, 'kimi-k3').aa.intelligenceIndex, 59.7);
+  assert.equal(byId(res.models, 'mimo-v2.5').aa.intelligenceIndex, 38.04); // sibling unaffected
+});
+
 test('records without the 36-char lowercase id marker are ignored', async () => {
   const cov = tinyCoverage();
   const noId = flightPush({ slug: 'decoy-a', shortName: 'Decoy', intelligenceIndex: 99 });

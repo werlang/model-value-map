@@ -89,19 +89,32 @@ test('force bypasses a fresh cache and hits the network', async () => {
   assert.ok(env.fetch.calls.length > before);
 });
 
-test('an expired cache is ignored; a fresh one is honored (30 min TTL)', async () => {
+test('an expired cache answers stale instantly and refreshes in the background', async () => {
   const env = standardEnv({});
   await env.sb.LiveData.load(tinySnapshot());
+  const t1 = JSON.parse(env.sb.storage.getItem(CACHE_KEY)).t;
 
-  env.Date.advance(29 * MIN); // inside TTL
-  const callsBefore = env.fetch.calls.length;
+  // inside TTL → served from cache
+  env.Date.advance(29 * MIN);
   const cached = await env.sb.LiveData.load(tinySnapshot());
   assert.equal(cached.state, 'cached');
 
-  env.Date.advance(2 * MIN); // now 31 min — past TTL
-  const refetched = await env.sb.LiveData.load(tinySnapshot());
-  assert.equal(refetched.state, 'live');
-  assert.ok(env.fetch.calls.length > callsBefore);
+  // past TTL → the aged payload paints immediately as stale (refreshing), and
+  // fetchFresh runs behind the callback
+  env.Date.advance(2 * MIN);
+  const seen = [];
+  const res = await env.sb.LiveData.load(tinySnapshot(), { onUpdate: (r) => seen.push(r) });
+  assert.equal(res.state, 'stale');
+  assert.equal(res.refreshing, true);
+  assert.equal(res.fetchedAt, t1, 'painted from the aged payload');
+
+  await env.sb.settle(); // let the background refresh land
+  assert.deepEqual([...seen.map((s) => s.state)], ['live'], 'fresh outcome reported via onUpdate');
+  const t2 = JSON.parse(env.sb.storage.getItem(CACHE_KEY)).t;
+  assert.ok(t2 > t1, 'background refresh rewrote the fast cache');
+
+  const third = await env.sb.LiveData.load(tinySnapshot());
+  assert.equal(third.state, 'cached'); // next visit rides the rewritten cache
 });
 
 // ---------- hostile / damaged cache content ----------

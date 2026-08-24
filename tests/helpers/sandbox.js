@@ -34,11 +34,17 @@ export function createSandbox({
   fetchImpl,
   WorkerClass = FakeWorker,
   loadApp = false,
+  loadLive = true,                // false simulates live.js failing to load
   clockStart = DEFAULT_CLOCK_START, // 2025-08-15-ish; tests advance via sandbox.Date
 } = {}) {
   const DateImpl = makeClock(clockStart);
   const doc = loadApp ? makeDocument() : null;
   const consoleCalls = { error: [], warn: [], log: [] };
+  class FakeRO {
+    constructor(cb) { this.cb = cb; FakeRO.instances.push(this); }
+    observe() {} unobserve() {} disconnect() {}
+  }
+  FakeRO.instances = [];
   const box = {
     window: null, // set below
     localStorage: storage,
@@ -50,7 +56,7 @@ export function createSandbox({
     AbortSignal,
     Date: DateImpl,
     document: doc,
-    ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+    ResizeObserver: FakeRO,
     requestAnimationFrame: (cb) => setTimeout(() => cb(DateImpl.now()), 0),
     cancelAnimationFrame: (id) => clearTimeout(id),
     navigator: {},
@@ -68,9 +74,10 @@ export function createSandbox({
   box.globalThis = box;
   vm.createContext(box);
 
-  vm.runInContext(snapshotSource ?? read('data.js'), box, { filename: 'data.js' });
-  vm.runInContext(read('live.js'), box, { filename: 'live.js' });
-  if (loadApp) vm.runInContext(read('app.js'), box, { filename: 'app.js' });
+  const src = snapshotSource ?? read('data.js');
+  vm.runInContext(src, box, { filename: path.join(ROOT, 'data.js') });
+  if (loadLive) vm.runInContext(read('live.js'), box, { filename: path.join(ROOT, 'live.js') });
+  if (loadApp) vm.runInContext(read('app.js'), box, { filename: path.join(ROOT, 'app.js') });
 
   return {
     box,
@@ -81,6 +88,8 @@ export function createSandbox({
     document: doc,
     Date: DateImpl,
     consoleCalls,
+    /** fires the last ResizeObserver callback (simulates a container resize) */
+    triggerResize() { const ro = FakeRO.instances.at(-1); if (ro?.cb) ro.cb(); },
     el(id) { return doc ? doc.getElementById(id) : null; },
     /** run one macro-task flush for queued microtasks/promises */
     async settle(ticks = 3) { for (let i = 0; i < ticks; i++) await new Promise((r) => setImmediate(r)); },
