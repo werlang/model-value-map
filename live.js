@@ -123,6 +123,9 @@ window.LiveData = (function () {
   // earns the right to populate the localStorage cache.
   let transportFailures = 0;
 
+  // Returns validated page text; '' when the origin authoritatively answers
+  // 404/410 (confirmed miss — direct transport only); null when every
+  // transport failed. Callers must distinguish '' from null with ===.
   async function fetchText(url, validate, timeoutMs = 25000) {
     // OpenCode sends no CORS header today, so the browser path starts at the
     // relays (rotated, unhealthy ones benched); the direct attempt stays
@@ -138,11 +141,13 @@ window.LiveData = (function () {
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
         });
-        // A 404/410 is the server's authoritative "doesn't exist" answer —
-        // e.g. an AA page for a model it hasn't scored. That must not count
-        // as a transport failure (it would block caching forever), so it
-        // returns a confirmed-miss marker instead of null.
-        if (res.status === 404 || res.status === 410) { noteRelay(pi, true); return ''; }
+        // A 404/410 from the DIRECT transport is the origin server's
+        // authoritative "doesn't exist" answer — e.g. an AA page for a model
+        // it hasn't scored. It must not count as a transport failure (that
+        // would block caching forever), so it returns a confirmed-miss
+        // marker instead of null. Relay responses never get this treatment:
+        // a proxy can emit its own 404 without the origin ever being asked.
+        if (pi === 0 && (res.status === 404 || res.status === 410)) { noteRelay(pi, true); return ''; }
         if (!res.ok) { noteRelay(pi, false); continue; }
         const text = await res.text();
         if (validate(text)) { noteRelay(pi, true); return text; }
@@ -403,7 +408,9 @@ window.LiveData = (function () {
         for (let attempt = 0; attempt < j.candidates.length && !rec; attempt++) {
           const html = await fetchText('https://artificialanalysis.ai/models/' + j.candidates[attempt],
             (t) => t.includes('currentModel') || t.includes('intelligenceIndex'), 25000);
-          if (!html) break;
+          // null = transports exhausted (give up), '' = confirmed 404 on THIS
+          // slug (keep trying the remaining candidates).
+          if (html === null) break;
           rec = scanAaModels(extractFlight(html)).get(j.candidates[attempt]) || null;
         }
         return { id: j.id, rec };
