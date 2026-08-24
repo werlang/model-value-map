@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Model Value Map — OpenCode usage × Artificial Analysis intelligence</title>
+  <meta name="description" content="Models developers actually ran on OpenCode, plotted by cost per 1M tokens against the Artificial Analysis Intelligence Index. Dashed Pareto line marks models nothing beats on both axes." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f49e0'/%3E%3Cpath d='M6 22 L14 20 L22 10' stroke='%23fbfcfd' stroke-width='3' stroke-dasharray='5 3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#chart-region">Skip to chart</a>
+
+  <header class="masthead">
+    <p class="eyebrow">OpenCode real-usage data × Artificial Analysis Intelligence Index</p>
+    <div class="masthead-row">
+      <h1 class="display">The value frontier.</h1>
+      <p class="updated-stamp" id="stamp">
+        <span class="stamp-dot" aria-hidden="true"></span>
+        <span id="stamp-text">Snapshot retrieved Aug 23, 2026</span>
+        <button type="button" class="stamp-refresh" id="stamp-refresh" title="Fetch fresh data from both sources" aria-label="Refresh live data">
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96M13.6 1.6v3h-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </p>
+    </div>
+    <p class="lede">
+      The top&nbsp;18 models developers ran on OpenCode, placed by what they cost per million
+      tokens and how they score on intelligence. The dashed cobalt line is the Pareto frontier —
+      nothing to its upper-left beats a member of it on both price and intelligence.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section id="chart-region" class="panel chart-panel" aria-label="Cost versus intelligence scatter plot">
+      <div class="chart-head">
+        <h2 class="panel-title">Cost per 1M tokens vs intelligence score</h2>
+        <div class="quick-actions" role="group" aria-label="Quick visibility filters">
+          <button type="button" class="action" data-action="all">All</button>
+          <button type="button" class="action" data-action="none">None</button>
+          <button type="button" class="action" data-action="frontier">Frontier only</button>
+        </div>
+      </div>
+      <div class="chart-holder" id="chart-holder"></div>
+      <p class="axis-note">X is log-scaled · dot area ∝ tokens processed on OpenCode this month · labels show leaderboard rank</p>
+    </section>
+
+    <aside class="side-rail">
+      <section class="panel readout-panel" aria-label="Model readout" aria-live="polite">
+        <div id="readout"></div>
+      </section>
+
+      <section class="panel excluded-panel" aria-label="Models not on the chart">
+        <h2 class="panel-title">Off the map</h2>
+        <p class="panel-sub">Tracked by OpenCode but missing one axis — shown here so nothing quietly disappears.</p>
+        <ul class="excluded-list" id="excluded-list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <section class="panel toggles-panel" aria-label="Toggle models">
+    <div class="toggles-head">
+      <h2 class="panel-title">Models</h2>
+      <p class="panel-sub" id="visible-count"></p>
+    </div>
+    <div id="toggles"></div>
+  </section>
+
+  <footer class="colophon">
+    <div class="source-row">
+      <p><strong>X axis</strong> — USD per 1M output tokens, from the OpenCode “Token Cost” board
+        (model pages used where the board omits a model).</p>
+      <p><strong>Y axis</strong> — <span id="aa-index-name">Artificial Analysis Intelligence Index v4.1.1</span>,
+        independently measured by Artificial Analysis.</p>
+    </div>
+    <p class="source-links" id="source-links"></p>
+    <p class="caveat">
+      On load, the page requests both sources directly (Artificial Analysis allows cross-origin
+      requests; OpenCode goes through public CORS relays) and merges them over the embedded
+      snapshot, so a failed or offline fetch degrades gracefully. OpenCode’s embedded data is
+      parsed inside an isolated Web Worker; Artificial Analysis payloads are parsed as inert
+      text and never executed. Results are cached for 30 minutes — use ⟳ to force a refresh.
+      Scores compare model variants as published (effort levels noted in the readout).
+    </p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="live.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
