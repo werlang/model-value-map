@@ -498,7 +498,9 @@
     if (res.state === 'live') setStamp('live', 'Live · OpenCode updated ' + fmtClock(res.ocUpdatedAt));
     else if (res.state === 'cached') setStamp('live', 'Live · fetched ' + Math.max(1, Math.round((Date.now() - res.fetchedAt) / 60000)) + ' min ago');
     else if (res.state === 'partial') setStamp('partial', 'Live + snapshot · ' + res.snapFallbacks + ' values from snapshot');
-    else if (res.state === 'stale') setStamp('partial', 'Stale live data · fetched ' + fmtAge(res.fetchedAt) + ' ago · sources unreachable');
+    else if (res.state === 'stale') setStamp('partial', 'Stale live data · fetched '
+      + fmtAge(res.fetchedAt) + ' ago'
+      + (res.refreshing ? ' · refreshing…' : ' · sources unreachable'));
     else setStamp('snapshot', 'Snapshot · Aug 23, 2026');
   }
 
@@ -519,7 +521,10 @@
   function refreshLive(force) {
     if (!window.LiveData) { updateStamp(null); return; }
     updateStamp({ state: 'loading' });
-    LiveData.load(SNAPSHOT.models, { force }).then(applyLiveResult).catch(() => updateStamp(null));
+    // load() may answer twice: a past-TTL visit gets stale data immediately
+    // and the finished network refresh arrives via onUpdate.
+    LiveData.load(SNAPSHOT.models, { force, onUpdate: applyLiveResult })
+      .then(applyLiveResult).catch(() => updateStamp(null));
   }
 
   // ---------- boot ----------

@@ -3,8 +3,11 @@
  *   • artificialanalysis.ai  → sends `Access-Control-Allow-Origin: *`, fetched directly.
  *   • opencode.ai            → sends no CORS header, fetched through public relays
  *                              (allorigins → codetabs → corsproxy), each response
- *                              validated before parsing. The starting relay rotates
- *                              per request so no single relay absorbs every hit.
+ *                              validated before parsing. Transports RACE with
+ *                              staggered starts instead of queueing, so one slow
+ *                              relay costs a head start, not its full timeout.
+ *                              The starting relay rotates per request so no single
+ *                              relay absorbs every hit.
  *
  * Robustness model:
  *   • Per-model page URLs come from the canonical links embedded in the /data
@@ -18,6 +21,9 @@
  *   • Parsed payloads are cached ONLY after a fetch with zero transport
  *     failures, so a flaky relay never pins stale data for 30 minutes.
  *     (A 404/410 is an authoritative "no such page", not a failure.)
+ *   • Past the TTL, the newest clean payload is still served immediately
+ *     ("stale") while a background refresh runs; the page only blocks on the
+ *     network for a truly cold first visit or an explicit force refresh.
  *   • Any successful OpenCode backbone fetch also refreshes an unTTL'd
  *     last-known-good copy ('mvm.live.lastgood'). If OpenCode later becomes
  *     unreachable through every transport, the page renders it (status
@@ -86,12 +92,12 @@ window.LiveData = (function () {
   }
 
   // ---------- fetch with relay chain ----------
-  function timeoutSignal(ms) {
-    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
-    const c = new AbortController();
-    setTimeout(() => c.abort(), ms);
-    return c.signal;
-  }
+  // Per-transport budget (status line + body) and the head start one transport
+  // gets before the next joins the race. The head start is deliberately wider
+  // than it needs to be: relays routinely take 4–8s for a big page, and every
+  // hedge that fires is a duplicate request a rate-limited relay must serve.
+  const ATTEMPT_TIMEOUT_MS = 20000;
+  const HEDGE_DELAY_MS = 5000;
 
   const PROXIES = [
     (u) => u, // direct — works for AA today, and for OpenCode if it ever adds CORS
@@ -123,53 +129,152 @@ window.LiveData = (function () {
   // earns the right to populate the localStorage cache.
   let transportFailures = 0;
 
+  // Relay politeness: public relays queue and throttle when hammered, so a
+  // wide fan-out that lets every job race every relay at once turns into a
+  // self-inflicted slowdown (measured: 12 concurrent jobs pushed single
+  // codetabs requests to ~19s). A small GLOBAL cap on in-flight relay
+  // requests keeps total pressure fixed; the per-request race then decides
+  // WHICH transport wins each URL. Direct attempts bypass the cap — they are
+  // fast and either answer or die on CORS immediately.
+  const MAX_RELAY_INFLIGHT = 5;
+  let relaySlots = MAX_RELAY_INFLIGHT;
+  const relayPumps = new Set(); // each in-flight fetchText's launch scheduler
+
+  function releaseRelay() {
+    relaySlots++;
+    for (const pump of relayPumps) pump(); // parked transports grab free slots
+  }
+
   // Returns validated page text; '' when the origin authoritatively answers
   // 404/410 (confirmed miss — direct transport only); null when every
   // transport failed. Callers must distinguish '' from null with ===.
-  async function fetchText(url, validate, timeoutMs = 25000) {
-    // OpenCode sends no CORS header today, so the browser path starts at the
-    // relays (rotated, unhealthy ones benched); the direct attempt stays
-    // available as an absolute last resort — one fast TypeError in a
-    // CORS-blocked browser today, instant success if OpenCode ever adds the
-    // header. For AA the direct attempt stays first; relays are only backup.
+  //
+  // Transports RACE instead of queueing: the first starts alone, and each
+  // further transport joins HEDGE_DELAY_MS later only if no validated answer
+  // has landed yet — a hung or crawling relay costs its head start, not its
+  // whole timeout. Fast failures skip ahead immediately, so a dead relay never
+  // even waits for its hedge timer. Worst case is now bounded near one attempt
+  // budget plus a few head starts, instead of a sum of sequential timeouts.
+  function fetchText(url, validate) {
     const oc = url.includes('opencode.ai');
-    const order = oc ? rotatedRelays() : [0].concat(rotatedRelays());
-    for (const pi of order) {
-      try {
-        const res = await fetch(PROXIES[pi](url), {
-          signal: timeoutSignal(timeoutMs),
-          credentials: 'omit',
-          referrerPolicy: 'no-referrer',
-        });
-        // A 404/410 from the DIRECT transport is the origin server's
-        // authoritative "doesn't exist" answer — e.g. an AA page for a model
-        // it hasn't scored. It must not count as a transport failure (that
-        // would block caching forever), so it returns a confirmed-miss
-        // marker instead of null. Relay responses never get this treatment:
-        // a proxy can emit its own 404 without the origin ever being asked.
-        if (pi === 0 && (res.status === 404 || res.status === 410)) { noteRelay(pi, true); return ''; }
-        if (!res.ok) { noteRelay(pi, false); continue; }
-        const text = await res.text();
-        if (validate(text)) { noteRelay(pi, true); return text; }
-        noteRelay(pi, false);
-      } catch (_) { noteRelay(pi, false); /* try the next transport */ }
-    }
-    if (oc) {
-      try {
-        const res = await fetch(url, {
-          signal: timeoutSignal(timeoutMs),
-          credentials: 'omit',
-          referrerPolicy: 'no-referrer',
-        });
-        if (res.status === 404 || res.status === 410) return '';
-        if (res.ok) {
-          const text = await res.text();
-          if (validate(text)) return text;
+    // Direct stays FIRST for AA (CORS is allowed today) and LAST for OpenCode
+    // (CORS is blocked in-browser today; kept as a zero-cost canary for the
+    // day that changes — until then it only joins the race if every relay
+    // stalled, where it previously ran as a separate last-resort pass).
+    const order = oc ? rotatedRelays().concat([0]) : [0].concat(rotatedRelays());
+    return new Promise((resolve) => {
+      let settled = false; // a final outcome exists — stop starting/counting
+      let launched = 0;
+      let parked = false;  // next transport waits for a global relay slot
+      const inflight = [];
+
+      function exhausted() {
+        return launched >= order.length && inflight.every((a) => a.finished);
+      }
+
+      // Final answer: cancel whatever is still racing, resolve exactly once.
+      function settle(value) {
+        if (settled) return;
+        settled = true;
+        for (const a of inflight) {
+          clearTimeout(a.timer);
+          if (!a.finished) {
+            a.finished = true;
+            try { a.ctrl.abort(); } catch (_) {}
+            if (a.pi !== 0) releaseRelay();
+          }
         }
-      } catch (_) { /* CORS blocked, as expected in-browser today */ }
-    }
-    transportFailures++;
-    return null;
+        relayPumps.delete(pump);
+        resolve(value);
+      }
+
+      function failAttempt(att) {
+        if (att.finished || settled) return;
+        att.finished = true;
+        clearTimeout(att.timer);
+        if (att.pi !== 0) releaseRelay();
+        noteRelay(att.pi, false);
+        if (exhausted()) { transportFailures++; settle(null); }
+        else next('fail');
+      }
+
+      // Launch the next transport. Strict admission rules keep the race
+      // economical — a job may add a transport only when
+      //   • nothing of its own is in flight (a failure skips ahead
+      //     immediately, mirroring the old sequential chain), or
+      //   • its OWN hedge timer fired (a deliberate race join against a slow
+      //     transport), or
+      //   • it is parked on the global relay cap and a slot just freed.
+      // Another job releasing a slot must never accelerate THIS job past an
+      // attempt that is still unresolved — otherwise successful transports
+      // get shadowed by redundant duplicates that burn relay goodwill.
+      function next(reason) {
+        if (settled || launched >= order.length) return;
+        const active = inflight.reduce((n, a) => n + (a.finished ? 0 : 1), 0);
+        if (active > 0 && reason !== 'hedge' && !(reason === 'resume' && parked)) return;
+        const pi = order[launched];
+        if (pi !== 0 && relaySlots <= 0) { parked = true; return; }
+        parked = false;
+        launched++;
+        if (pi !== 0) relaySlots--;
+        startAttempt(pi);
+      }
+
+      function startAttempt(pi) {
+        const att = { pi, ctrl: new AbortController(), timer: 0, finished: false };
+        inflight.push(att);
+        const complete = () => {
+          if (att.finished) return;
+          att.finished = true;
+          clearTimeout(att.timer);
+          if (pi !== 0) releaseRelay();
+        };
+        att.timer = setTimeout(() => failAttempt(att), ATTEMPT_TIMEOUT_MS);
+        fetch(PROXIES[pi](url), {
+          signal: att.ctrl.signal,
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer',
+        }).then(async (res) => {
+          if (att.finished || settled) return;
+          // A 404/410 from the DIRECT transport is the origin server's
+          // authoritative "doesn't exist" answer — e.g. an AA page for a model
+          // it hasn't scored. It must not count as a transport failure (that
+          // would block caching forever), so it settles as a confirmed miss
+          // instead of null. Relay responses never get this treatment: a proxy
+          // can emit its own 404 without the origin ever being asked.
+          if (pi === 0 && (res.status === 404 || res.status === 410)) {
+            complete();
+            noteRelay(pi, true);
+            settle('');
+            return;
+          }
+          if (!res.ok) { failAttempt(att); return; }
+          const text = await res.text();
+          if (att.finished || settled) return;
+          if (validate(text)) {
+            complete();
+            noteRelay(pi, true);
+            settle(text);
+          } else {
+            failAttempt(att); // body arrived but failed validation
+          }
+        }).catch(() => {
+          // Network error, CORS block, timeout abort — or LOSING THE RACE
+          // (aborted by settle()). The finished/settled guards make only the
+          // genuine failures reach noteRelay, so a healthy relay that merely
+          // lost is never benched unfairly.
+          failAttempt(att);
+        });
+        // If this transport turns out to be merely slow, let the next one
+        // join the race. Redundant when failures already advanced `launched`:
+        // the guard inside next() makes stale timers harmless no-ops.
+        setTimeout(() => next('hedge'), HEDGE_DELAY_MS);
+      }
+
+      const pump = () => next('resume'); // run by releaseRelay when a slot frees
+      relayPumps.add(pump);
+      next('init');
+    });
   }
 
   // ---------- canonical per-model page links ----------
@@ -341,19 +446,17 @@ window.LiveData = (function () {
     return results;
   }
 
-  async function load(snapshotModels, opts) {
-    const force = !!(opts && opts.force);
-    const snapById = new Map(snapshotModels.map((m) => [m.id, m]));
-    transportFailures = 0;
+  function staleResultFor(snapById, entry) {
+    const live = { ...entry.live, aaIndex: new Map(entry.live.aaIndex) };
+    const merged = merge(snapById, live);
+    return { state: 'stale', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: entry.t, ocUpdatedAt: live.updatedAt };
+  }
 
-    if (!force) {
-      const cached = readCache();
-      if (cached && cached.live && Date.now() - cached.t < TTL_MS) {
-        const live = { ...cached.live, aaIndex: new Map(cached.live.aaIndex) };
-        const merged = merge(snapById, live);
-        return { state: 'cached', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: cached.t, ocUpdatedAt: live.updatedAt };
-      }
-    }
+  // The full network path: both indexes, parse, per-model fan-out, merge,
+  // cache write. Returns the fresh result, a stale render on total outage, or
+  // null when nothing usable was ever fetched.
+  async function fetchFresh(snapById) {
+    transportFailures = 0;
 
     // 1) the two index pages, in parallel
     const [ocHtml, aaHtml] = await Promise.all([
@@ -364,11 +467,7 @@ window.LiveData = (function () {
       // OpenCode is unreachable through every transport — render the newest
       // clean fetch we have ever seen rather than the ancient snapshot.
       const lastGood = readLastGood();
-      if (lastGood) {
-        const live = { ...lastGood.live, aaIndex: new Map(lastGood.live.aaIndex) };
-        const merged = merge(snapById, live);
-        return { state: 'stale', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: lastGood.t, ocUpdatedAt: live.updatedAt };
-      }
+      if (lastGood) return staleResultFor(snapById, lastGood);
       return null; // nothing ever fetched cleanly — stay on snapshot
     }
 
@@ -398,23 +497,26 @@ window.LiveData = (function () {
       .filter((r) => !((AA_SLUG[r.model] && aaIndex.get(AA_SLUG[r.model])) || aaIndex.get(normSlug(r.model))))
       .map((r) => ({ id: r.model, candidates: [...new Set([AA_SLUG[r.model], normSlug(r.model)].filter(Boolean))] }));
 
+    // Pool width: each job races its transports internally, so a wider pool
+    // only multiplies load when jobs are genuinely in flight. 6 keeps even a
+    // bad day (many per-model pages) to ~2 rounds through slow relays.
     const [ocResults, aaResults] = await Promise.all([
       parseOcPages((await loadPool(ocJobs.map((j) => async () => ({
         id: j.id,
-        html: await fetchText(j.url, (t) => t.includes('$R['), 25000),
-      })), 4)).filter((j) => j.html)),
+        html: await fetchText(j.url, (t) => t.includes('$R[')),
+      })), 6)).filter((j) => j.html)),
       loadPool(aaJobs.map((j) => async () => {
         let rec = null;
         for (let attempt = 0; attempt < j.candidates.length && !rec; attempt++) {
           const html = await fetchText('https://artificialanalysis.ai/models/' + j.candidates[attempt],
-            (t) => t.includes('currentModel') || t.includes('intelligenceIndex'), 25000);
+            (t) => t.includes('currentModel') || t.includes('intelligenceIndex'));
           // null = transports exhausted (give up), '' = confirmed 404 on THIS
           // slug (keep trying the remaining candidates).
           if (html === null) break;
           rec = scanAaModels(extractFlight(html)).get(j.candidates[attempt]) || null;
         }
         return { id: j.id, rec };
-      }), 3),
+      }), 6),
     ]);
 
     const ocPages = {};
@@ -441,6 +543,41 @@ window.LiveData = (function () {
 
     const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
     return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: Date.now(), ocUpdatedAt: live.updatedAt };
+  }
+
+  // Entry point. Fresh cache answers instantly; an EXPIRED cache (or bare
+  // last-known-good) is served immediately as 'stale' while fetchFresh runs
+  // behind the scenes — its outcome reaches the caller again through
+  // opts.onUpdate — so a past-TTL visit no longer stares at the snapshot for
+  // the whole reload. Only a truly cold first visit (or an explicit ⟳ force)
+  // awaits the wire before answering.
+  async function load(snapshotModels, opts) {
+    const force = !!(opts && opts.force);
+    const snapById = new Map(snapshotModels.map((m) => [m.id, m]));
+    const report = opts && typeof opts.onUpdate === 'function' ? opts.onUpdate : null;
+
+    if (!force) {
+      const cached = readCache();
+      if (cached && cached.live && Date.now() - cached.t < TTL_MS) {
+        const live = { ...cached.live, aaIndex: new Map(cached.live.aaIndex) };
+        const merged = merge(snapById, live);
+        return { state: 'cached', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: cached.t, ocUpdatedAt: live.updatedAt };
+      }
+      // Past TTL the newest clean payload still beats the ancient snapshot:
+      // paint it now, refresh in the background. While that refresh is in
+      // flight the stamp says "refreshing…"; if it ends in total outage the
+      // flag flips off so the stamp says "sources unreachable" instead.
+      const bg = cached && cached.live ? cached : readLastGood();
+      if (bg) {
+        const staleResult = { ...staleResultFor(snapById, bg), refreshing: true };
+        fetchFresh(snapById).then((fresh) => {
+          if (report) report(fresh || { ...staleResult, refreshing: false });
+        }).catch(() => { if (report) report({ ...staleResult, refreshing: false }); });
+        return staleResult;
+      }
+    }
+
+    return fetchFresh(snapById);
   }
 
   // ---------- merge live + snapshot ----------
