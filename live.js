@@ -3,7 +3,23 @@
  *   • artificialanalysis.ai  → sends `Access-Control-Allow-Origin: *`, fetched directly.
  *   • opencode.ai            → sends no CORS header, fetched through public relays
  *                              (allorigins → codetabs → corsproxy), each response
- *                              validated before parsing.
+ *                              validated before parsing. The starting relay rotates
+ *                              per request so no single relay absorbs every hit.
+ *
+ * Robustness model:
+ *   • Per-model page URLs come from the canonical links embedded in the /data
+ *     HTML; a constructed URL is only a fallback.
+ *   • Every fetched value passes a sanity check before it may override the
+ *     snapshot; anything missing or malformed degrades per-value to data.js.
+ *   • AA matching is tiered: curated slug → deterministic normalized id against
+ *     the live index → per-model AA page (both candidates tried). A renamed or
+ *     brand-new model keeps working without a manual map entry whenever its
+ *     OpenCode id maps to the AA slug by dots-to-dashes alone.
+ *   • Parsed payloads are cached ONLY after a fetch with zero transport
+ *     failures, so a flaky relay never pins stale data for 30 minutes.
+ *   • That same clean payload is also kept with no TTL ('mvm.live.lastgood').
+ *     If OpenCode later becomes unreachable through every transport, the page
+ *     renders it (status "stale", age shown) instead of the old snapshot.
  *
  * Safety model:
  *   • AA flight payloads are parsed as INERT TEXT (regex + brace matching) — never executed.
@@ -18,6 +34,7 @@ window.LiveData = (function () {
   'use strict';
 
   const CACHE_KEY = 'mvm.live.v1';
+  const CACHE_LASTGOOD = 'mvm.live.lastgood';
   const TTL_MS = 30 * 60 * 1000;
 
   // OpenCode model id → Artificial Analysis slug (variant chosen per README methodology)
@@ -39,6 +56,13 @@ window.LiveData = (function () {
     'qwen3.7-plus': 'qwen3-7-plus',
   };
 
+  // Deterministic cross-site guess: OpenCode ids differ from AA slugs mostly by
+  // dots vs dashes. Verified against the real catalog — exact normalized matches
+  // only, no fuzzy scoring, so a wrong pairing can never be invented here.
+  function normSlug(id) {
+    return id.toLowerCase().replace(/\./g, '-');
+  }
+
   const FALLBACK_HUES = ['#3B5BDB', '#D9480F', '#0CA678', '#9C36B5', '#0C8599', '#C2255C', '#6741D9', '#E8890C', '#2F9E44'];
   let hueCursor = 0;
   function hueFor(author, snapById, id) {
@@ -47,6 +71,16 @@ window.LiveData = (function () {
     let h = 0;
     for (let i = 0; i < author.length; i++) h = (h * 31 + author.charCodeAt(i)) >>> 0;
     return FALLBACK_HUES[h % FALLBACK_HUES.length] || FALLBACK_HUES[(hueCursor++) % FALLBACK_HUES.length];
+  }
+
+  // ---------- value validation ----------
+  const num = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  function validBoardRow(r) {
+    return !!r && typeof r.model === 'string' && num(r.total) && r.total >= 0 && num(r.output);
+  }
+  function validPageCost(c) {
+    return !!c && num(c.output) && c.output >= 0 && (c.input == null || num(c.input));
   }
 
   // ---------- fetch with relay chain ----------
@@ -64,23 +98,86 @@ window.LiveData = (function () {
     (u) => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
   ];
 
+  // Rate-limited relays fail less when no single one absorbs every request:
+  // each fetch starts at the next relay in the circle. A relay that keeps
+  // failing gets benched after three consecutive misses, so a dying relay
+  // can't tax every request with its full timeout.
+  let relayCursor = 0;
+  const RELAY_INDEXES = [1, 2, 3]; // PROXIES positions of the relays (0 = direct)
+  const relayFails = [0, 0, 0, 0];
+
+  function rotatedRelays() {
+    const alive = RELAY_INDEXES.filter((i) => relayFails[i] < 3);
+    const pool = alive.length ? alive : RELAY_INDEXES; // benched relays return after a full sweep
+    const start = relayCursor++ % pool.length;
+    return pool.slice(start).concat(pool.slice(0, start));
+  }
+
+  function noteRelay(pi, ok) {
+    relayFails[pi] = ok ? 0 : Math.min(3, relayFails[pi] + 1);
+  }
+
+  // Transport failures seen during the current load(); a clean fetch is what
+  // earns the right to populate the localStorage cache.
+  let transportFailures = 0;
+
   async function fetchText(url, validate, timeoutMs = 25000) {
-    // OpenCode sends no CORS header today; skipping the doomed direct attempt
-    // keeps the console clean and the load fast.
-    const chain = url.includes('opencode.ai') ? PROXIES.slice(1) : PROXIES;
-    for (const wrap of chain) {
+    // OpenCode sends no CORS header today, so the browser path starts at the
+    // relays (rotated, unhealthy ones benched); the direct attempt stays
+    // available as an absolute last resort — one fast TypeError in a
+    // CORS-blocked browser today, instant success if OpenCode ever adds the
+    // header. For AA the direct attempt stays first; relays are only backup.
+    const oc = url.includes('opencode.ai');
+    const order = oc ? rotatedRelays() : [0].concat(rotatedRelays());
+    for (const pi of order) {
       try {
-        const res = await fetch(wrap(url), {
+        const res = await fetch(PROXIES[pi](url), {
           signal: timeoutSignal(timeoutMs),
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
         });
-        if (!res.ok) continue;
+        if (!res.ok) { noteRelay(pi, false); continue; }
         const text = await res.text();
-        if (validate(text)) return text;
-      } catch (_) { /* relay failed — try the next one */ }
+        if (validate(text)) { noteRelay(pi, true); return text; }
+        noteRelay(pi, false);
+      } catch (_) { noteRelay(pi, false); /* try the next transport */ }
     }
+    if (oc) {
+      try {
+        const res = await fetch(url, {
+          signal: timeoutSignal(timeoutMs),
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer',
+        });
+        if (res.ok) {
+          const text = await res.text();
+          if (validate(text)) return text;
+        }
+      } catch (_) { /* CORS blocked, as expected in-browser today */ }
+    }
+    transportFailures++;
     return null;
+  }
+
+  // ---------- canonical per-model page links ----------
+  // The /data HTML embeds the true URL of every model page. Harvesting them
+  // removes URL construction as a failure mode; the constructed form remains
+  // as a fallback for rows without a link.
+  function harvestOcLinks(html) {
+    const links = new Map();
+    const re = /href="(\/data\/[a-z0-9-]+\/[a-z0-9.-]+)"/g;
+    let m;
+    while ((m = re.exec(html))) {
+      const seg = m[1].slice('/data/'.length);
+      if (!seg.includes('/') || seg.split('/').length !== 2) continue;
+      if (seg.startsWith('_build/') || seg.startsWith('compare/')) continue;
+      links.set(seg, m[1]);
+    }
+    return links;
+  }
+  function ocUrlFor(row, links) {
+    const seg = row.provider + '/' + row.model.replace(/\./g, '-');
+    return 'https://opencode.ai' + (links.get(seg) || '/data/' + seg);
   }
 
   // ---------- OpenCode hydration parsing (isolated worker) ----------
@@ -95,7 +192,7 @@ window.LiveData = (function () {
     '',
     '  function parse(html) {',
     '    var scripts = [];',
-    '    var re = /<script>([\\s\\S]*?)<\\/script>/g;',
+    '    var re = /<script[^>]*>([\\s\\S]*?)<\\/script>/g;',
     '    var m;',
     '    while ((m = re.exec(html))) if (m[1].indexOf("$R[") !== -1) scripts.push(m[1]);',
     '    var noop = function () {};',
@@ -171,7 +268,7 @@ window.LiveData = (function () {
       if (end < 0) continue;
       try {
         const o = JSON.parse(flight.slice(m.index, end + 1));
-        if (o && o.slug && o.shortName && typeof o.intelligenceIndex === 'number' && !out.has(o.slug)) {
+        if (o && o.slug && o.shortName && typeof o.intelligenceIndex === 'number' && o.intelligenceIndex >= 0 && !out.has(o.slug)) {
           out.set(o.slug, {
             slug: o.slug,
             shortName: o.shortName,
@@ -187,13 +284,29 @@ window.LiveData = (function () {
   }
 
   // ---------- cache ----------
+  function parseCacheEntry(raw) {
+    try {
+      const c = JSON.parse(raw || 'null');
+      if (!c || !c.live || !Array.isArray(c.live.leaderboard) || typeof c.t !== 'number') return null;
+      return c;
+    } catch (_) { return null; }
+  }
+  function readStore(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
   function readCache() {
-    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (_) { return null; }
+    return parseCacheEntry(readStore(CACHE_KEY));
+  }
+  // Last known good payload: same honesty rule (written only after a fetch
+  // with zero transport failures), but with no TTL — it exists so a total
+  // relay outage still renders recent live data instead of the old snapshot.
+  function readLastGood() {
+    return parseCacheEntry(readStore(CACHE_LASTGOOD));
   }
   function writeCache(live) {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } }));
-    } catch (_) { /* storage full / private mode */ }
+    const entry = JSON.stringify({ t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
+    try { localStorage.setItem(CACHE_KEY, entry); } catch (_) { /* storage full / private mode */ }
+    try { localStorage.setItem(CACHE_LASTGOOD, entry); } catch (_) { /* ditto */ }
   }
 
   // ---------- orchestration ----------
@@ -213,6 +326,7 @@ window.LiveData = (function () {
   async function load(snapshotModels, opts) {
     const force = !!(opts && opts.force);
     const snapById = new Map(snapshotModels.map((m) => [m.id, m]));
+    transportFailures = 0;
 
     if (!force) {
       const cached = readCache();
@@ -228,24 +342,43 @@ window.LiveData = (function () {
       fetchText('https://opencode.ai/data', (t) => t.includes('tokenCost') && t.includes('leaderboard')),
       fetchText('https://artificialanalysis.ai/models', (t) => t.includes('intelligenceIndex')),
     ]);
-    if (!ocHtml) return null; // OpenCode is the backbone — without it we stay on snapshot
+    if (!ocHtml) {
+      // OpenCode is unreachable through every transport — render the newest
+      // clean fetch we have ever seen rather than the ancient snapshot.
+      const lastGood = readLastGood();
+      if (lastGood) {
+        const live = { ...lastGood.live, aaIndex: new Map(lastGood.live.aaIndex) };
+        const merged = merge(snapById, live);
+        return { state: 'stale', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: lastGood.t, ocUpdatedAt: live.updatedAt };
+      }
+      return null; // nothing ever fetched cleanly — stay on snapshot
+    }
+
+    // Canonical per-model URLs, straight from the horse's mouth.
+    const ocLinks = harvestOcLinks(ocHtml);
 
     // 2) parse OC home (worker) + AA index (text scan)
     const ocParsed = await parseOcPages([{ id: 'home', html: ocHtml }]);
     const home = ocParsed && ocParsed[0] && ocParsed[0].result && ocParsed[0].result.home;
     if (!home || !Array.isArray(home.leaderboard)) return null;
 
+    // Drop malformed board rows instead of trusting them; the merge falls back
+    // to the per-model page (or snapshot) for anything removed here.
+    const rows = home.leaderboard.filter((r) => r && typeof r.model === 'string');
+    const board = new Map((home.tokenCost || []).filter(validBoardRow).map((r) => [r.model, r]));
+
     const aaIndex = aaHtml ? scanAaModels(extractFlight(aaHtml)) : new Map();
 
     // 3) fan out for per-model pages (only what the index pages can't answer)
-    const board = new Map((home.tokenCost || []).map((r) => [r.model, r]));
-    const rows = home.leaderboard;
     const ocJobs = rows
       .filter((r) => !board.has(r.model))
-      .map((r) => ({ id: r.model, url: 'https://opencode.ai/data/' + r.provider + '/' + r.model.replace(/\./g, '-') }));
+      .map((r) => ({ id: r.model, url: ocUrlFor(r, ocLinks) }));
+    // AA candidate slugs: curated mapping first, then the deterministic
+    // normalized id — covers renamed slugs and brand-new models without
+    // inventing pairings.
     const aaJobs = rows
-      .filter((r) => AA_SLUG[r.model] && !aaIndex.has(AA_SLUG[r.model]))
-      .map((r) => ({ id: r.model, slug: AA_SLUG[r.model] }));
+      .filter((r) => !((AA_SLUG[r.model] && aaIndex.get(AA_SLUG[r.model])) || aaIndex.get(normSlug(r.model))))
+      .map((r) => ({ id: r.model, candidates: [...new Set([AA_SLUG[r.model], normSlug(r.model)].filter(Boolean))] }));
 
     const [ocResults, aaResults] = await Promise.all([
       parseOcPages((await loadPool(ocJobs.map((j) => async () => ({
@@ -254,32 +387,33 @@ window.LiveData = (function () {
       })), 4)).filter((j) => j.html)),
       loadPool(aaJobs.map((j) => async () => {
         let rec = null;
-        for (let attempt = 0; attempt < 2 && !rec; attempt++) {
-          const html = await fetchText('https://artificialanalysis.ai/models/' + j.slug,
+        for (let attempt = 0; attempt < j.candidates.length && !rec; attempt++) {
+          const html = await fetchText('https://artificialanalysis.ai/models/' + j.candidates[attempt],
             (t) => t.includes('currentModel') || t.includes('intelligenceIndex'), 25000);
           if (!html) break;
-          const found = scanAaModels(extractFlight(html)).get(j.slug);
-          if (found) rec = found;
+          rec = scanAaModels(extractFlight(html)).get(j.candidates[attempt]) || null;
         }
         return { id: j.id, rec };
       }), 3),
     ]);
 
     const ocPages = {};
-    for (const r of ocResults || []) if (r && r.result && r.result.info) ocPages[r.id] = r.result.info;
+    for (const r of ocResults || []) {
+      if (r && r.result && r.result.info && validPageCost(r.result.info.cost)) ocPages[r.id] = r.result.info;
+    }
     const aaPages = {};
     for (const r of aaResults) if (r && r.rec) aaPages[r.id] = r.rec;
 
     const live = {
       updatedAt: home.updatedAt,
       leaderboard: rows,
-      tokenCost: home.tokenCost || [],
+      tokenCost: [...board.values()],
       ocPages,
       aaIndex,
       aaPages,
     };
     const merged = merge(snapById, live);
-    writeCache(live);
+    if (!transportFailures) writeCache(live); // failed fetches stay uncached so the next load retries
 
     const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
     return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: Date.now(), ocUpdatedAt: live.updatedAt };
@@ -301,7 +435,7 @@ window.LiveData = (function () {
       if (tc) {
         ocCostPerM = tc.total;
         ocCost = { input: tc.input, output: tc.output, cached: tc.cached };
-      } else if (page && page.cost && page.cost.output != null) {
+      } else if (page && validPageCost(page.cost)) {
         ocCostPerM = page.cost.output;
         ocCost = { input: page.cost.input, output: page.cost.output, cached: page.cost.cacheRead };
       } else if (snap.ocCostPerM != null) {
@@ -310,15 +444,16 @@ window.LiveData = (function () {
         snapFallbacks++;
       }
 
-      const aaLive = (AA_SLUG[id] && live.aaIndex.get(AA_SLUG[id])) || live.aaPages[id] || null;
+      const aaLive = (AA_SLUG[id] && live.aaIndex.get(AA_SLUG[id])) || live.aaIndex.get(normSlug(id)) || live.aaPages[id] || null;
       let aa = null;
       if (aaLive) {
+        const slugUsed = aaLive.slug || AA_SLUG[id] || normSlug(id);
         aa = {
           name: aaLive.shortName || aaLive.name,
           intelligenceIndex: aaLive.intelligenceIndex,
           effort: aaLive.effort,
           isOpenWeights: !!aaLive.isOpenWeights,
-          url: 'https://artificialanalysis.ai/models/' + (AA_SLUG[id] || aaLive.slug),
+          url: 'https://artificialanalysis.ai/models/' + slugUsed,
         };
       } else if (snap.aa) {
         aa = { ...snap.aa };
@@ -336,11 +471,11 @@ window.LiveData = (function () {
         label: (page && page.name) || snap.label || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         author: row.author,
         rank: row.rank,
-        weeklyTokensT: Math.round((row.tokens / 1000) * 100) / 100,
+        weeklyTokensT: num(row.tokens) ? Math.round((row.tokens / 1000) * 100) / 100 : 0,
         hue: hueFor(row.author, snapById, id),
         ocCostPerM,
         ocCost,
-        contextWindowTokens: (page && page.limit && page.limit.context) || snap.contextWindowTokens || null,
+        contextWindowTokens: (page && num(page.limit && page.limit.context) && page.limit.context) || snap.contextWindowTokens || null,
         reasoning: page ? !!page.reasoning : (snap.reasoning ?? null),
         openWeights: page ? !!page.openWeights : (snap.openWeights ?? null),
         aa,

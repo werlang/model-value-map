@@ -479,6 +479,12 @@
     try { return new Date(iso).toISOString().slice(11, 16) + ' UTC'; } catch (_) { return ''; }
   }
 
+  function fmtAge(ts) {
+    const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
+    if (mins < 60) return mins + ' min';
+    return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+  }
+
   function updateStamp(res) {
     refreshBtn.classList.remove('spinning');
     refreshBtn.disabled = false;
@@ -492,6 +498,7 @@
     if (res.state === 'live') setStamp('live', 'Live · OpenCode updated ' + fmtClock(res.ocUpdatedAt));
     else if (res.state === 'cached') setStamp('live', 'Live · fetched ' + Math.max(1, Math.round((Date.now() - res.fetchedAt) / 60000)) + ' min ago');
     else if (res.state === 'partial') setStamp('partial', 'Live + snapshot · ' + res.snapFallbacks + ' values from snapshot');
+    else if (res.state === 'stale') setStamp('partial', 'Stale live data · fetched ' + fmtAge(res.fetchedAt) + ' ago · sources unreachable');
     else setStamp('snapshot', 'Snapshot · Aug 23, 2026');
   }
 
