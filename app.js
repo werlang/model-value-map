@@ -544,4 +544,8 @@
   } else {
     updateStamp({ state: 'snapshot' });
   }
+
+  // Headless test seam: pure helpers only — nothing here captures DOM nodes
+  // or mutable state, so exposing them has no effect on page behavior.
+  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx };
 })();

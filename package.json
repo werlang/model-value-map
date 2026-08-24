@@ -1,0 +1,9 @@
+{
+  "name": "model-value-map",
+  "private": true,
+  "description": "Static dashboard: OpenCode token cost × Artificial Analysis Intelligence Index.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
