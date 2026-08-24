@@ -22,7 +22,7 @@ These are design decisions, not accidents. Do not violate them without explicit 
    - `app.js` → IIFE that renders and wires the UI
 3. **Never execute remote content.** Artificial Analysis flight payloads are parsed as *inert text* (regex + brace matching). OpenCode hydration blobs are evaluated inside a throwaway **Blob Worker with stubbed globals**, never on the page or against the DOM. Any change to parsing must preserve this.
 4. **Graceful degradation is mandatory.** Every live value must pass validation (`live.js`) before overriding the snapshot; anything missing falls back to `data.js` per value. The page must always render, even fully offline.
-5. **Cache honestly.** Parsed payloads are cached in `localStorage` (key prefix `mvm.`) only after a fetch with zero transport failures. TTL is 30 minutes; the newest clean payload is also retained without TTL as `mvm.live.lastgood`, and when every transport fails the page renders it (`state: 'stale'`) instead of the raw snapshot.
+5. **Cache honestly.** Parsed payloads are cached in `localStorage` (key prefix `mvm.`) only after a fetch with zero transport failures; TTL is 30 minutes. HTTP 404/410 is an authoritative miss, not a transport failure. Any successful OpenCode backbone fetch also refreshes an unTTL'd `mvm.live.lastgood`; when every transport fails the page renders it (`state: 'stale'`) instead of the raw snapshot.
 
 ## File map
 

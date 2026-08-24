@@ -17,9 +17,11 @@
  *     OpenCode id maps to the AA slug by dots-to-dashes alone.
  *   • Parsed payloads are cached ONLY after a fetch with zero transport
  *     failures, so a flaky relay never pins stale data for 30 minutes.
- *   • That same clean payload is also kept with no TTL ('mvm.live.lastgood').
- *     If OpenCode later becomes unreachable through every transport, the page
- *     renders it (status "stale", age shown) instead of the old snapshot.
+ *     (A 404/410 is an authoritative "no such page", not a failure.)
+ *   • Any successful OpenCode backbone fetch also refreshes an unTTL'd
+ *     last-known-good copy ('mvm.live.lastgood'). If OpenCode later becomes
+ *     unreachable through every transport, the page renders it (status
+ *     "stale", age shown) instead of the old snapshot.
  *
  * Safety model:
  *   • AA flight payloads are parsed as INERT TEXT (regex + brace matching) — never executed.
@@ -136,6 +138,11 @@ window.LiveData = (function () {
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
         });
+        // A 404/410 is the server's authoritative "doesn't exist" answer —
+        // e.g. an AA page for a model it hasn't scored. That must not count
+        // as a transport failure (it would block caching forever), so it
+        // returns a confirmed-miss marker instead of null.
+        if (res.status === 404 || res.status === 410) { noteRelay(pi, true); return ''; }
         if (!res.ok) { noteRelay(pi, false); continue; }
         const text = await res.text();
         if (validate(text)) { noteRelay(pi, true); return text; }
@@ -149,6 +156,7 @@ window.LiveData = (function () {
           credentials: 'omit',
           referrerPolicy: 'no-referrer',
         });
+        if (res.status === 404 || res.status === 410) return '';
         if (res.ok) {
           const text = await res.text();
           if (validate(text)) return text;
@@ -297,16 +305,21 @@ window.LiveData = (function () {
   function readCache() {
     return parseCacheEntry(readStore(CACHE_KEY));
   }
-  // Last known good payload: same honesty rule (written only after a fetch
-  // with zero transport failures), but with no TTL — it exists so a total
-  // relay outage still renders recent live data instead of the old snapshot.
+  // Last known good payload: written whenever the OpenCode backbone fetch
+  // succeeds (authoritative misses like HTTP 404 don't taint it). It exists
+  // so a total relay outage still renders recent live data instead of the
+  // old snapshot.
   function readLastGood() {
     return parseCacheEntry(readStore(CACHE_LASTGOOD));
   }
+  function entryFor(live) {
+    return JSON.stringify({ t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
+  }
   function writeCache(live) {
-    const entry = JSON.stringify({ t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
-    try { localStorage.setItem(CACHE_KEY, entry); } catch (_) { /* storage full / private mode */ }
-    try { localStorage.setItem(CACHE_LASTGOOD, entry); } catch (_) { /* ditto */ }
+    try { localStorage.setItem(CACHE_KEY, entryFor(live)); } catch (_) { /* storage full / private mode */ }
+  }
+  function writeLastGood(live) {
+    try { localStorage.setItem(CACHE_LASTGOOD, entryFor(live)); } catch (_) { /* ditto */ }
   }
 
   // ---------- orchestration ----------
@@ -413,7 +426,11 @@ window.LiveData = (function () {
       aaPages,
     };
     const merged = merge(snapById, live);
-    if (!transportFailures) writeCache(live); // failed fetches stay uncached so the next load retries
+    // Fresh cache: only a zero-transport-failure fetch earns the 30-minute
+    // fast path. Last-good: any successful OpenCode backbone fetch refreshes
+    // the outage layer — stray optional-page misses must not starve it.
+    if (!transportFailures) writeCache(live);
+    writeLastGood(live);
 
     const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
     return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: Date.now(), ocUpdatedAt: live.updatedAt };

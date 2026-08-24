@@ -38,7 +38,7 @@ A few things worth knowing:
 - **OpenCode** sends no CORS header, so requests go through public relays, rotating the starting relay per request to spread rate-limit pressure; a direct request is the absolute last resort. Per-model page URLs come from the canonical links embedded in the /data HTML. Parsing happens in a throwaway Web Worker; the remote script never touches the page.
 - **AA matching is tiered**: curated slug (`AA_SLUG`) → deterministic dots-to-dashes normalization against the live index → per-model AA page. Renamed slugs and brand-new models keep working without manual edits whenever their OpenCode id matches an AA slug by normalization alone.
 - **Every value is validated** (finite prices, sane scores) before it may override the snapshot; anything missing or malformed degrades per-value, never per-page.
-- **Caching is honest**: results are stored only after a fetch with zero transport failures — a 30-minute fresh cache plus an unexpired last-known-good copy that keeps the map alive during total outages. Hit ⟳ to force a refresh.
+- **Caching is honest**: the 30-minute fresh cache is written only after a fetch with zero transport failures (a 404 counts as a real answer, not a failure), and every successful OpenCode fetch also refreshes an unexpired last-known-good copy that keeps the map alive during total outages. Hit ⟳ to force a refresh.
 - Axis ranges adapt to whatever the data contains, so new models can never clip off the edge.
 
 ## Features
