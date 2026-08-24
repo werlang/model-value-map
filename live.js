@@ -29,7 +29,7 @@ window.LiveData = (function () {
     'deepseek-v4-pro': 'deepseek-v4-pro',
     'hy3': 'hy3',
     'gpt-5.6-luna': 'gpt-5-6-luna',
-    'nemotron-3.5-lightning': 'nvidia-nemotron-3-5-lightning',
+    'nemotron-3.5-lightning': 'nemotron-3-5-lightning',
     'minimax-m3': 'minimax-m3',
     'glm-5.2': 'glm-5-2',
     'glm-5.3': 'glm-5-3',

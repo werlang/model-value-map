@@ -5,7 +5,7 @@ A static, dependency-free dashboard that crosses two public data sources:
 - **X axis** — cost per 1M tokens, from [opencode.ai/data](https://opencode.ai/data)
   ("Token Cost" board; models the board omits use the output rate published on
   their own OpenCode model pages).
-- **Y axis** — [Artificial Analysis Intelligence Index v4.1.1](https://artificialanalysis.ai/models),
+- **Y axis** — [Artificial Analysis Intelligence Index](https://artificialanalysis.ai/models),
   from the models page and per-model pages (RSC flight payloads).
 
 ## Live data
@@ -69,7 +69,10 @@ globals); the one-line server is the dependable path.
 - Frontier members as of the snapshot: DeepSeek V4 Flash → GPT-5.6 Luna →
   DeepSeek V4 Pro → GLM-5.3 → Kimi K3.
 - Not plottable: ox-alpha, Muse Spark 1.2 (contrib), Nemotron 3 Ultra (no published
-  token cost); Nemotron 3.5 Lightning, DS V4 Flash Vision Exp, Laguna-S 2.1 (no AA score yet).
+  token cost); DS V4 Flash Vision Exp, Laguna-S 2.1 (no AA score yet). Nemotron 3.5
+  Lightning was in that group until AA scored it under the unprefixed slug
+  `nemotron-3-5-lightning` (fixed 2026-08-24); the snapshot predates the score, so it
+  only plots when live data is available.
 - AA scores are per published variant (effort levels noted in the readout).
 - Public relays are rate-limited and occasionally fail; the chain retries across
   them and degrades to the snapshot per value, so the page always renders.
