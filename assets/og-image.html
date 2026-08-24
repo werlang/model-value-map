@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<!-- Source for assets/og-image.png (1200×630 social share card).
+     Regenerate: serve the repo root, open this file at viewport 1200×630
+     (device scale 2) and capture the page as PNG into assets/og-image.png. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(900px 420px at 78% -10%, rgba(31, 73, 224, 0.07), transparent),
+      #edf0f3;
+    color: #101b2d;
+    display: flex;
+    flex-direction: column;
+    padding: 58px 64px 44px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #55647a;
+  }
+  .row { display: flex; align-items: center; gap: 48px; flex: 1 1 auto; min-height: 0; }
+  .copy { width: 560px; flex: 0 0 auto; }
+  h1 {
+    margin-top: 18px;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    font-size: 74px;
+    letter-spacing: -0.045em;
+    line-height: 1.02;
+  }
+  h1 .dash { color: #1f49e0; }
+  .sub {
+    margin-top: 22px;
+    font-size: 23px;
+    line-height: 1.45;
+    color: #55647a;
+    max-width: 52ch;
+  }
+  .sub strong { color: #101b2d; font-weight: 600; }
+  .chart { flex: 1 1 auto; align-self: stretch; min-width: 0; }
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    margin-top: 26px;
+    padding-top: 16px;
+    border-top: 1px solid #c9d2da;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 15px;
+    color: #55647a;
+  }
+  .footer .repo { color: #101b2d; font-weight: 600; }
+</style>
+</head>
+<body>
+  <p class="eyebrow">OpenCode real-usage data × Artificial Analysis Intelligence Index</p>
+  <div class="row">
+    <div class="copy">
+      <h1>The value<br />frontier<span class="dash">.</span></h1>
+      <p class="sub"><strong>Which AI models give you the most intelligence per dollar?</strong>
+        Real usage from OpenCode, plotted by price against measured intelligence —
+        the dashed line marks where the good deals end.</p>
+    </div>
+    <svg class="chart" viewBox="0 0 440 330" aria-hidden="true">
+      <!-- grid -->
+      <g stroke="#dde3e8" stroke-width="1" stroke-dasharray="2 4">
+        <line x1="46" y1="20" x2="46" y2="290"/><line x1="140" y1="20" x2="140" y2="290"/>
+        <line x1="234" y1="20" x2="234" y2="290"/><line x1="328" y1="20" x2="328" y2="290"/>
+        <line x1="46" y1="70" x2="430" y2="70"/><line x1="46" y1="145" x2="430" y2="145"/>
+        <line x1="46" y1="220" x2="430" y2="220"/>
+      </g>
+      <g stroke="#ccd4db" stroke-width="1.5">
+        <line x1="46" y1="290" x2="430" y2="290"/>
+        <line x1="46" y1="20" x2="46" y2="290"/>
+      </g>
+      <!-- dominated zone hatch -->
+      <defs>
+        <pattern id="h" patternUnits="userSpaceOnUse" width="8" height="8">
+          <path d="M0 8 L8 0" stroke="#1f49e0" stroke-opacity="0.10" stroke-width="1.2"/>
+        </pattern>
+      </defs>
+      <polygon points="66,258 150,196 250,118 340,62 340,290 66,290" fill="url(#h)" opacity="0.55"/>
+      <!-- dots (illustrative) -->
+      <g stroke="#fbfcfd" stroke-width="3">
+        <circle cx="66"  cy="258" r="13" fill="#3B5BDB"/>
+        <circle cx="112" cy="230" r="9"  fill="#1971C2"/>
+        <circle cx="150" cy="196" r="15" fill="#E8890C"/>
+        <circle cx="205" cy="160" r="10" fill="#D9480F"/>
+        <circle cx="250" cy="118" r="17" fill="#2f9e44"/>
+        <circle cx="305" cy="96"  r="11" fill="#9C36B5"/>
+        <circle cx="340" cy="62"  r="14" fill="#C2255C"/>
+        <circle cx="392" cy="40"  r="10" fill="#5F3DC4"/>
+        <circle cx="228" cy="240" r="12" fill="#868E96"/>
+        <circle cx="360" cy="180" r="9"  fill="#A61E4D"/>
+      </g>
+      <!-- pareto frontier -->
+      <polyline points="66,258 150,196 250,118 340,62" fill="none"
+                stroke="#1f49e0" stroke-width="5" stroke-linecap="round" stroke-dasharray="16 11"/>
+      <text x="128" y="252" font-family="IBM Plex Mono, monospace" font-size="15" font-weight="600"
+            letter-spacing="2" fill="#1f49e0" transform="rotate(-33 128 252)">PARETO FRONTIER</text>
+      <text x="352" y="256" font-family="IBM Plex Mono, monospace" font-size="14" fill="#8593a8">$/1M →</text>
+      <text x="56" y="308" font-family="IBM Plex Mono, monospace" font-size="14" fill="#8593a8">intelligence ↑</text>
+      <!-- frontier member rings -->
+      <g fill="none" stroke="#1f49e0" stroke-width="2">
+        <circle cx="66" cy="258" r="19"/><circle cx="150" cy="196" r="21"/>
+        <circle cx="250" cy="118" r="23"/><circle cx="340" cy="62" r="20"/>
+      </g>
+    </svg>
+  </div>
+  <div class="footer">
+    <span class="repo">github.com/werlang/model-value-map</span>
+    <span>live data · no build step · MIT</span>
+  </div>
+</body>
+</html>
