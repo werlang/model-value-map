@@ -119,10 +119,12 @@ export async function handleRequest(request, env = {}) {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  const kv = env.DATA_KV || env.model_value_map_KV;
+
   if (request.method === 'GET') {
     let raw = null;
-    if (env.DATA_KV && typeof env.DATA_KV.get === 'function') {
-      raw = await env.DATA_KV.get('latest');
+    if (kv && typeof kv.get === 'function') {
+      raw = await kv.get('latest');
     } else {
       raw = memoryStore;
     }
@@ -164,8 +166,8 @@ export async function handleRequest(request, env = {}) {
     }
 
     const serialized = JSON.stringify(body);
-    if (env.DATA_KV && typeof env.DATA_KV.put === 'function') {
-      await env.DATA_KV.put('latest', serialized);
+    if (kv && typeof kv.put === 'function') {
+      await kv.put('latest', serialized);
     } else {
       memoryStore = serialized;
     }

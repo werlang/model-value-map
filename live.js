@@ -44,7 +44,7 @@ window.LiveData = (function () {
   const CACHE_KEY = 'mvm.live.v1';
   const CACHE_LASTGOOD = 'mvm.live.lastgood';
   const TTL_MS = 30 * 60 * 1000;
-  const DEFAULT_API_URL = 'https://model-value-map-api.werlang.workers.dev';
+  const DEFAULT_API_URL = 'https://model-value-map-api.pswerlang.workers.dev';
 
   function getApiUrl(opts) {
     if (opts && opts.apiUrl !== undefined) return opts.apiUrl;
