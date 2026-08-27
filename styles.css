@@ -196,7 +196,7 @@ body {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-  height: 600px;
+  height: 700px;
   box-sizing: border-box;
 }
 
@@ -204,7 +204,7 @@ body {
   padding: 14px 16px 10px;
   display: flex;
   flex-direction: column;
-  height: 600px;
+  height: 700px;
   box-sizing: border-box;
 }
 
