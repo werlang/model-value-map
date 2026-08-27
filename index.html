@@ -44,7 +44,7 @@
         </a>
         <p class="updated-stamp" id="stamp">
           <span class="stamp-dot" aria-hidden="true"></span>
-          <span id="stamp-text">Snapshot retrieved Aug 23, 2026</span>
+          <span id="stamp-text">Loading live data…</span>
           <button type="button" class="stamp-refresh" id="stamp-refresh" title="Fetch fresh data from both sources" aria-label="Refresh live data">
             <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96M13.6 1.6v3h-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -52,7 +52,7 @@
       </div>
     </div>
     <p class="lede">
-      The top&nbsp;18 models developers ran on OpenCode, placed by what they cost per million
+      The top models developers ran on OpenCode, placed by what they cost per million
       tokens and how they score on intelligence. The dashed cobalt line is the Pareto frontier —
       nothing to its upper-left beats a member of it on both price and intelligence.
     </p>
@@ -112,18 +112,12 @@
     <p class="source-links">Static page — no build step, no dependencies, MIT licensed. Code &amp; issues:
       <a href="https://github.com/werlang/model-value-map" target="_blank" rel="noopener">github.com/werlang/model-value-map</a></p>
     <p class="caveat">
-      On load, the page requests both sources directly (Artificial Analysis allows cross-origin
-      requests; OpenCode goes through public CORS relays) and merges them over the embedded
-      snapshot, so a failed or offline fetch degrades gracefully. Transports race each request so
-      one slow relay can’t stall the load, and past the cache TTL the last known-good data is
-      shown immediately while a fresh fetch runs in the background. OpenCode’s embedded data is
-      parsed inside an isolated Web Worker; Artificial Analysis payloads are parsed as inert
-      text and never executed. Results are cached for 30 minutes — use ⟳ to force a refresh.
-      Scores compare model variants as published (effort levels noted in the readout).
+      Data is retrieved live from the Cloudflare Worker API (with fallback crawling of OpenCode
+      via CORS relays and Artificial Analysis directly) and cached in LocalStorage for 30 minutes.
+      Scores compare model variants as published (effort levels noted in the readout). Use ⟳ to force a refresh.
     </p>
   </footer>
 
-  <script src="data.js"></script>
   <script src="live.js" defer></script>
   <script src="app.js" defer></script>
 </body>

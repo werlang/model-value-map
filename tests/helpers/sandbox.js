@@ -74,15 +74,15 @@ export function createSandbox({
   box.globalThis = box;
   vm.createContext(box);
 
-  const src = snapshotSource ?? read('data.js');
-  vm.runInContext(src, box, { filename: path.join(ROOT, 'data.js') });
+  const src = snapshotSource ?? (fs.existsSync(path.join(ROOT, 'data.js')) ? read('data.js') : null);
+  if (src) vm.runInContext(src, box, { filename: path.join(ROOT, 'data.js') });
   if (loadLive) vm.runInContext(read('live.js'), box, { filename: path.join(ROOT, 'live.js') });
   if (loadApp) vm.runInContext(read('app.js'), box, { filename: path.join(ROOT, 'app.js') });
 
   return {
     box,
     LiveData: box.LiveData,
-    DASHBOARD_DATA: box.DASHBOARD_DATA,
+    DASHBOARD_DATA: box.DASHBOARD_DATA ?? null,
     internals: box.MVM_TEST ?? null,
     storage,
     document: doc,

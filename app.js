@@ -5,8 +5,8 @@
 (function () {
   'use strict';
 
-  const SNAPSHOT = window.DASHBOARD_DATA;
-  let MODELS = SNAPSHOT.models;
+  const SNAPSHOT = window.DASHBOARD_DATA || null;
+  let MODELS = (SNAPSHOT && SNAPSHOT.models) || [];
   const STORE_KEY = 'mvm.hidden.v1';
 
   let plotted = [];
@@ -101,9 +101,13 @@
   const excludedEl = document.getElementById('excluded-list');
   const sourceLinksEl = document.getElementById('source-links');
 
-  sourceLinksEl.innerHTML = SNAPSHOT.meta.sources
+  const DEFAULT_SOURCES = (SNAPSHOT && SNAPSHOT.meta && SNAPSHOT.meta.sources) || [
+    { name: 'opencode.ai/data', url: 'https://opencode.ai/data' },
+    { name: 'artificialanalysis.ai/models', url: 'https://artificialanalysis.ai/models' },
+  ];
+  sourceLinksEl.innerHTML = DEFAULT_SOURCES
     .map((s) => `<a href="${s.url}" target="_blank" rel="noopener">${esc(s.name)}</a>`)
-    .join(' · ') + ' — snapshot retrieved ' + SNAPSHOT.meta.retrieved;
+    .join(' · ');
 
   // ---------- chart ----------
   let svg = null;
@@ -541,7 +545,7 @@
     updateStamp({ state: 'loading' });
     // load() may answer twice: a past-TTL visit gets stale data immediately
     // and the finished network refresh arrives via onUpdate.
-    LiveData.load(SNAPSHOT.models, { force, onUpdate: applyLiveResult })
+    LiveData.load(MODELS, { force, onUpdate: applyLiveResult })
       .then(applyLiveResult).catch(() => updateStamp(null));
   }
 
@@ -560,7 +564,7 @@
   ro.observe(holder);
   render();
 
-  // paint the snapshot immediately, then go live
+  // Wire refresh button and trigger live data fetch
   refreshBtn.addEventListener('click', () => refreshLive(true));
   if (window.LiveData) {
     refreshLive(false);
