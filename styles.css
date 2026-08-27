@@ -181,7 +181,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .panel {
@@ -199,7 +199,7 @@ body {
 }
 
 .chart-panel { padding: 14px 16px 10px; display: flex; flex-direction: column; }
-.readout-panel { padding: 14px 16px; flex: 0 0 auto; }
+.readout-panel { padding: 14px 16px; flex: 0 0 auto; min-height: 220px; }
 .excluded-panel { padding: 14px 16px 10px; }
 .toggles-panel { margin-top: 14px; padding: 14px 16px 16px; }
 

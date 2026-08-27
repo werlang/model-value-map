@@ -117,8 +117,7 @@
 
   function render() {
     const w = Math.max(320, holder.clientWidth);
-    // fill the panel's available height when the layout stretches it
-    const h = Math.round(Math.min(900, Math.max(360, holder.clientHeight || w * 0.58)));
+    const h = Math.round(Math.min(680, Math.max(380, w * 0.56)));
     const { xd, yd, xt, yt } = computeDomains();
     const { x, y, iw, ih } = makeScales(w, h, xd, yd);
 
@@ -562,7 +561,11 @@
   buildTable();
 
   let raf = 0;
+  let lastW = 0;
   const ro = new ResizeObserver(() => {
+    const w = Math.round(holder.clientWidth);
+    if (!w || w === lastW) return;
+    lastW = w;
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(render);
   });
