@@ -179,7 +179,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 14px;
   align-items: stretch;
 }
@@ -196,7 +196,7 @@ body {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-  height: 520px;
+  height: 600px;
   box-sizing: border-box;
 }
 
@@ -204,7 +204,7 @@ body {
   padding: 14px 16px 10px;
   display: flex;
   flex-direction: column;
-  height: 520px;
+  height: 600px;
   box-sizing: border-box;
 }
 
