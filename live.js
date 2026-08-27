@@ -33,7 +33,11 @@ window.LiveData = (function () {
     'kimi-k2.7-code': 'kimi-k2-7-code',
     'kimi-k3': 'kimi-k3',
     'qwen3.7-plus': 'qwen3-7-plus',
-    'command-a-plus': 'command-a-plus',
+    'command-a-plus': 'cohere-command-a',
+    'claude-4-5-haiku-reasoning': 'claude-haiku-4-5',
+    'claude-4-5-haiku': 'claude-haiku-4-5',
+    'glm-5-3-flash': 'glm-5-3-flash',
+    'glm-5.3-flash': 'glm-5-3-flash',
   };
 
   function normSlug(id) {
@@ -74,26 +78,46 @@ window.LiveData = (function () {
   }
 
   function labFor(id, name, family, providerKey, providerName) {
-    const s = `${id || ''} ${name || ''} ${family || ''} ${providerKey || ''} ${providerName || ''}`.toLowerCase();
-    if (s.includes('deepseek')) return 'DeepSeek';
-    if (s.includes('claude') || s.includes('anthropic')) return 'Anthropic';
-    if (s.includes('gpt') || s.includes('openai') || s.includes('o1') || s.includes('o3') || s.includes('o4') || s.includes('chatgpt')) return 'OpenAI';
-    if (s.includes('gemini') || s.includes('gemma') || s.includes('google')) return 'Google';
-    if (s.includes('kimi') || s.includes('moonshot')) return 'Moonshot AI';
-    if (s.includes('glm') || s.includes('zhipu') || s.includes('zai-org') || s.includes('z-ai')) return 'Zhipu AI';
-    if (s.includes('qwen') || s.includes('alibaba') || s.includes('tongyi')) return 'Alibaba';
-    if (s.includes('mimo') || s.includes('xiaomi')) return 'Xiaomi';
-    if (s.includes('minimax')) return 'MiniMax';
-    if (s.includes('grok') || s.includes('xai')) return 'xAI';
-    if (s.includes('nemotron') || s.includes('nvidia')) return 'Nvidia';
-    if (s.includes('mistral') || s.includes('ministral') || s.includes('codestral') || s.includes('devstral') || s.includes('pixtral')) return 'Mistral';
-    if (s.includes('llama') || s.includes('meta') || s.includes('muse')) return 'Meta';
-    if (s.includes('hunyuan') || s.includes('tencent') || s.includes('hy3') || s.includes('hy-')) return 'Tencent';
-    if (s.includes('cohere') || s.includes('command-r') || s.includes('aya')) return 'Cohere';
-    if (s.includes('stepfun') || s.includes('step-')) return 'StepFun';
-    if (s.includes('perplexity') || s.includes('sonar')) return 'Perplexity';
-    if (s.includes('amazon') || s.includes('nova') || s.includes('titan') || s.includes('bedrock')) return 'Amazon';
-    if (s.includes('baidu') || s.includes('ernie')) return 'Baidu';
+    const modelStr = `${id || ''} ${name || ''} ${family || ''}`.toLowerCase();
+    if (/\b(deepseek|deepseek-ai)\b/i.test(modelStr) || modelStr.includes('deepseek')) return 'DeepSeek';
+    if (/\b(claude|anthropic)\b/i.test(modelStr) || modelStr.includes('claude')) return 'Anthropic';
+    if (/\b(gpt|o1|o3|o4|chatgpt|openai)\b/i.test(modelStr) || modelStr.startsWith('gpt-') || modelStr.startsWith('openai/')) return 'OpenAI';
+    if (/\b(gemini|gemma|google)\b/i.test(modelStr) || modelStr.includes('gemini') || modelStr.includes('gemma')) return 'Google';
+    if (/\b(kimi|moonshot|moonshotai)\b/i.test(modelStr) || modelStr.includes('kimi') || modelStr.includes('moonshot')) return 'Moonshot AI';
+    if (/\b(glm|zhipu|zhipuai|zai-org|z-ai)\b/i.test(modelStr) || modelStr.includes('glm') || modelStr.includes('zhipu')) return 'Zhipu AI';
+    if (/\b(qwen|alibaba|tongyi)\b/i.test(modelStr) || modelStr.includes('qwen')) return 'Alibaba';
+    if (/\b(mimo|xiaomi)\b/i.test(modelStr) || modelStr.includes('mimo') || modelStr.includes('xiaomi')) return 'Xiaomi';
+    if (/\b(minimax|minimaxai)\b/i.test(modelStr) || modelStr.includes('minimax')) return 'MiniMax';
+    if (/\b(grok|xai)\b/i.test(modelStr) || modelStr.includes('grok')) return 'xAI';
+    if (/\b(nemotron|nvidia)\b/i.test(modelStr) || modelStr.includes('nemotron')) return 'Nvidia';
+    if (/\b(mistral|ministral|codestral|devstral|pixtral)\b/i.test(modelStr)) return 'Mistral';
+    if (/\b(llama|meta|muse)\b/i.test(modelStr) || modelStr.includes('llama') || modelStr.includes('muse')) return 'Meta';
+    if (/\b(hunyuan|tencent|hy3)\b/i.test(modelStr) || modelStr.includes('hunyuan')) return 'Tencent';
+    if (/\b(cohere|command-r|aya)\b/i.test(modelStr)) return 'Cohere';
+    if (/\b(stepfun|step-)\b/i.test(modelStr)) return 'StepFun';
+    if (/\b(solar|upstage)\b/i.test(modelStr)) return 'Upstage';
+    if (/\b(perplexity|sonar)\b/i.test(modelStr)) return 'Perplexity';
+    if (/\b(amazon|nova|titan|bedrock)\b/i.test(modelStr)) return 'Amazon';
+    if (/\b(baidu|ernie)\b/i.test(modelStr)) return 'Baidu';
+
+    const provStr = `${providerKey || ''} ${providerName || ''}`.toLowerCase();
+    if (provStr.includes('openai')) return 'OpenAI';
+    if (provStr.includes('anthropic')) return 'Anthropic';
+    if (provStr.includes('google')) return 'Google';
+    if (provStr.includes('deepseek')) return 'DeepSeek';
+    if (provStr.includes('moonshot')) return 'Moonshot AI';
+    if (provStr.includes('zhipu')) return 'Zhipu AI';
+    if (provStr.includes('alibaba')) return 'Alibaba';
+    if (provStr.includes('xiaomi')) return 'Xiaomi';
+    if (provStr.includes('minimax')) return 'MiniMax';
+    if (provStr.includes('xai')) return 'xAI';
+    if (provStr.includes('nvidia')) return 'Nvidia';
+    if (provStr.includes('mistral')) return 'Mistral';
+    if (provStr.includes('meta')) return 'Meta';
+    if (provStr.includes('tencent')) return 'Tencent';
+    if (provStr.includes('cohere')) return 'Cohere';
+    if (provStr.includes('upstage')) return 'Upstage';
+
     return providerName || providerKey || 'AI Lab';
   }
 
@@ -154,9 +178,12 @@ window.LiveData = (function () {
     const firstParty = [
       'openai', 'anthropic', 'google', 'deepseek', 'meta', 'mistral', 'cohere',
       'moonshot', 'moonshotai', 'zhipu', 'zhipuai', 'nvidia', 'xiaomi', 'alibaba',
-      'minimax', 'tencent', 'xai', 'stepfun'
+      'minimax', 'tencent', 'xai', 'stepfun', 'upstage'
     ];
     const provKeys = Object.keys(data).sort((a, b) => {
+      const aPlan = a.includes('plan') || a.includes('coding');
+      const bPlan = b.includes('plan') || b.includes('coding');
+      if (aPlan !== bPlan) return aPlan ? 1 : -1;
       const aP = firstParty.some((k) => a.includes(k)) ? 0 : 1;
       const bP = firstParty.some((k) => b.includes(k)) ? 0 : 1;
       return aP - bP;
@@ -205,7 +232,10 @@ window.LiveData = (function () {
         if (mKey.includes('/')) keysToSet.push(mKey.split('/').pop(), normSlug(mKey.split('/').pop()));
 
         for (const k of keysToSet) {
-          if (!map.has(k)) map.set(k, info);
+          const existing = map.get(k);
+          if (!existing || (existing.cost.output <= 0 && outCost > 0)) {
+            map.set(k, info);
+          }
         }
       }
     }
