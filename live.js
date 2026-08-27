@@ -602,9 +602,13 @@ window.LiveData = (function () {
     };
     const merged = merge(snapById, live);
     // Fresh cache: only a zero-transport-failure fetch earns the 30-minute
-    // fast path and updates the Cloudflare Worker API.
+    // fast path in localStorage.
     if (!transportFailures) {
       writeCache(live);
+    }
+    // Worker API update: sync whenever live backbone data (leaderboard + AA scores) was fetched
+    const hasBackbone = Array.isArray(rows) && rows.length > 0 && aaIndex && aaIndex.size > 0;
+    if (hasBackbone) {
       postToApi(apiUrl, { t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
     }
     writeLastGood(live);
