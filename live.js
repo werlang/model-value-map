@@ -73,6 +73,30 @@ window.LiveData = (function () {
     return -1;
   }
 
+  function labFor(id, name, family, providerKey, providerName) {
+    const s = `${id || ''} ${name || ''} ${family || ''} ${providerKey || ''} ${providerName || ''}`.toLowerCase();
+    if (s.includes('deepseek')) return 'DeepSeek';
+    if (s.includes('claude') || s.includes('anthropic')) return 'Anthropic';
+    if (s.includes('gpt') || s.includes('openai') || s.includes('o1') || s.includes('o3') || s.includes('o4') || s.includes('chatgpt')) return 'OpenAI';
+    if (s.includes('gemini') || s.includes('gemma') || s.includes('google')) return 'Google';
+    if (s.includes('kimi') || s.includes('moonshot')) return 'Moonshot AI';
+    if (s.includes('glm') || s.includes('zhipu') || s.includes('zai-org') || s.includes('z-ai')) return 'Zhipu AI';
+    if (s.includes('qwen') || s.includes('alibaba') || s.includes('tongyi')) return 'Alibaba';
+    if (s.includes('mimo') || s.includes('xiaomi')) return 'Xiaomi';
+    if (s.includes('minimax')) return 'MiniMax';
+    if (s.includes('grok') || s.includes('xai')) return 'xAI';
+    if (s.includes('nemotron') || s.includes('nvidia')) return 'Nvidia';
+    if (s.includes('mistral') || s.includes('ministral') || s.includes('codestral') || s.includes('devstral') || s.includes('pixtral')) return 'Mistral';
+    if (s.includes('llama') || s.includes('meta') || s.includes('muse')) return 'Meta';
+    if (s.includes('hunyuan') || s.includes('tencent') || s.includes('hy3') || s.includes('hy-')) return 'Tencent';
+    if (s.includes('cohere') || s.includes('command-r') || s.includes('aya')) return 'Cohere';
+    if (s.includes('stepfun') || s.includes('step-')) return 'StepFun';
+    if (s.includes('perplexity') || s.includes('sonar')) return 'Perplexity';
+    if (s.includes('amazon') || s.includes('nova') || s.includes('titan') || s.includes('bedrock')) return 'Amazon';
+    if (s.includes('baidu') || s.includes('ernie')) return 'Baidu';
+    return providerName || providerKey || 'AI Lab';
+  }
+
   function scanAaModels(flight) {
     const out = new Map();
     if (!flight || typeof flight !== 'string') return out;
@@ -96,6 +120,30 @@ window.LiveData = (function () {
         }
       } catch (_) {}
     }
+
+    const detailMatches = [...flight.matchAll(/\{"label":"([^"]+)","(?:artificialAnalysisIntelligenceIndex|intelligenceIndex)":([0-9.]+),"detailsUrl":"\/models\/([^"]+)"\}/g)];
+    for (const match of detailMatches) {
+      const slug = match[3];
+      if (!out.has(slug)) {
+        const rawLabel = match[1];
+        const effortMatch = rawLabel.match(/\(([^)]+)\)/);
+        const effort = effortMatch ? effortMatch[1] : null;
+        const shortName = rawLabel.replace(/\s*\([^)]*\)/, '').trim();
+        const score = parseFloat(match[2]);
+        if (typeof score === 'number' && !isNaN(score) && score >= 0) {
+          out.set(slug, {
+            slug: slug,
+            shortName: shortName,
+            name: rawLabel,
+            intelligenceIndex: Math.round(score * 100) / 100,
+            effort: effort,
+            isOpenWeights: false,
+            url: 'https://artificialanalysis.ai/models/' + slug,
+          });
+        }
+      }
+    }
+
     return out;
   }
 
@@ -103,10 +151,14 @@ window.LiveData = (function () {
   function parseModelsDev(data) {
     const map = new Map();
     if (!data || typeof data !== 'object') return map;
-    const firstParty = ['openai', 'anthropic', 'google', 'deepseek', 'meta', 'mistral', 'cohere', 'moonshot', 'zhipu', 'nvidia', 'xiaomi'];
+    const firstParty = [
+      'openai', 'anthropic', 'google', 'deepseek', 'meta', 'mistral', 'cohere',
+      'moonshot', 'moonshotai', 'zhipu', 'zhipuai', 'nvidia', 'xiaomi', 'alibaba',
+      'minimax', 'tencent', 'xai', 'stepfun'
+    ];
     const provKeys = Object.keys(data).sort((a, b) => {
-      const aP = firstParty.includes(a) ? 0 : 1;
-      const bP = firstParty.includes(b) ? 0 : 1;
+      const aP = firstParty.some((k) => a.includes(k)) ? 0 : 1;
+      const bP = firstParty.some((k) => b.includes(k)) ? 0 : 1;
       return aP - bP;
     });
 
@@ -132,10 +184,11 @@ window.LiveData = (function () {
           : (typeof cost.cacheWrite === 'number' && Number.isFinite(cost.cacheWrite) ? cost.cacheWrite : null);
         const limitContext = m.limit && typeof m.limit.context === 'number' && Number.isFinite(m.limit.context) ? m.limit.context : null;
         const limitOutput = m.limit && typeof m.limit.output === 'number' && Number.isFinite(m.limit.output) ? m.limit.output : null;
+        const author = labFor(m.id || mKey, m.name, m.family, providerKey, provName);
         const info = {
           id: m.id || mKey,
           name: m.name || mKey,
-          author: provName,
+          author,
           cost: {
             input: inCost,
             output: outCost,

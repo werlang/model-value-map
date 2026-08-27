@@ -47,7 +47,7 @@ test('first-party provider rate is prioritized over third-party duplicates', asy
   });
   const kimi = byId(res.models, 'kimi-k3');
   assert.equal(kimi.ocCostPerM, 15);
-  assert.equal(kimi.author, 'Moonshot');
+  assert.equal(kimi.author, 'Moonshot AI');
 });
 
 // ---------- AA matching tiers ----------
