@@ -8,7 +8,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeStorage } from './storage.js';
-import { FakeWorker } from './fake-worker.js';
 import { makeDocument } from './minidom.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -32,7 +31,7 @@ export function createSandbox({
   snapshotSource = null,          // string overriding data.js entirely
   storage = makeStorage(),
   fetchImpl,
-  WorkerClass = FakeWorker,
+  WorkerClass = null,
   loadApp = false,
   loadLive = true,                // false simulates live.js failing to load
   clockStart = DEFAULT_CLOCK_START, // 2025-08-15-ish; tests advance via sandbox.Date

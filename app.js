@@ -15,7 +15,8 @@
   function recompute() {
     plotted = MODELS.filter((m) => m.plot);
     excluded = MODELS.filter((m) => !m.plot);
-    tMax = Math.max(1, ...plotted.map((m) => m.weeklyTokensT || 0));
+    const tokenCounts = plotted.map((m) => m.weeklyTokensT).filter((t) => typeof t === 'number' && Number.isFinite(t) && t > 0);
+    tMax = tokenCounts.length ? Math.max(1, ...tokenCounts) : 1;
   }
 
   // ---------- state ----------
@@ -60,7 +61,8 @@
   }
 
   const R_MIN = 5, R_MAX = 15;
-  const radius = (t) => R_MIN + Math.sqrt(t / tMax) * (R_MAX - R_MIN);
+  const R_DEFAULT = 7;
+  const radius = (t) => (typeof t === 'number' && Number.isFinite(t) && t > 0 ? R_MIN + Math.sqrt(t / tMax) * (R_MAX - R_MIN) : R_DEFAULT);
 
   // Per-model label placement hints [dx, dy, textAnchor]
   const LABEL_HINTS = {
@@ -221,23 +223,26 @@
     }
 
     // dots
+    let dotIdx = 0;
     for (const m of plotted) {
       if (hidden.has(m.id)) continue;
       const cx = x(m.ocCostPerM), cy = y(m.aa.intelligenceIndex), r = radius(m.weeklyTokensT);
       const onF = frontierIds.has(m.id);
+      const rankNum = typeof m.rank === 'number' && Number.isFinite(m.rank) ? m.rank : (dotIdx + 1);
+      dotIdx++;
       const g = el('g', 'dot-point' + (onF ? ' frontier-member' : ''));
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'img');
       g.setAttribute('aria-label',
-        `${m.label}, rank ${m.rank}. ${fmt$(m.ocCostPerM)} per million tokens, intelligence ${m.aa.intelligenceIndex}${onF ? ', on the Pareto frontier' : ''}.`);
+        `${m.label}${m.rank ? `, rank ${m.rank}` : ''}. ${fmt$(m.ocCostPerM)} per million tokens, intelligence ${m.aa.intelligenceIndex}${onF ? ', on the Pareto frontier' : ''}.`);
       g.dataset.id = m.id;
       g.setAttribute('transform', `translate(${cx},${cy})`);
 
       const mark = el('circle', 'dot-mark');
       mark.setAttribute('r', r.toFixed(1));
-      mark.setAttribute('fill', m.hue);
+      mark.setAttribute('fill', m.hue || '#3B5BDB');
       mark.classList.add('dot-enter');
-      mark.style.animationDelay = `${80 + m.rank * 28}ms`;
+      mark.style.animationDelay = `${80 + rankNum * 28}ms`;
 
       const ring = el('circle', 'dot-ring');
       ring.setAttribute('r', (r + 4.5).toFixed(1));
@@ -298,14 +303,14 @@
       const c = model.ocCost || {};
       const onF = frontier.some((f) => f.id === model.id);
       const badges = [];
-      badges.push(`<span class="badge">rank #${model.rank}</span>`);
+      if (model.rank) badges.push(`<span class="badge">rank #${model.rank}</span>`);
       if (onF) badges.push('<span class="badge on-frontier">on frontier</span>');
       if (model.openWeights != null) badges.push(`<span class="badge">${model.openWeights ? 'open weights' : 'proprietary'}</span>`);
       if (model.reasoning != null) badges.push(`<span class="badge">${model.reasoning ? 'reasoning' : 'non-reasoning'}</span>`);
 
       readoutEl.innerHTML = `
         <h2 class="readout-model-title"><span class="chip-dot" style="--chip-c:${model.hue};width:11px;height:11px"></span>${esc(model.label)}</h2>
-        <p class="readout-author">${esc(model.author)} · leaderboard #${model.rank}</p>
+        <p class="readout-author">${esc(model.author)}${model.rank ? ` · leaderboard #${model.rank}` : ''}</p>
         <div class="readout-badges">${badges.join('')}</div>
         <dl class="readout-grid">
           <div><dt>Cost / 1M</dt><dd>${fmt$(model.ocCostPerM)} <small>(out)</small></dd></div>
@@ -313,12 +318,12 @@
           <div><dt>Input rate</dt><dd>${c.input != null ? fmt$(c.input) : '—'} <small>/1M</small></dd></div>
           <div><dt>Cached</dt><dd>${c.cached != null ? fmt$(c.cached) : '—'} <small>/1M</small></dd></div>
           <div><dt>Context</dt><dd>${fmtCtx(model.contextWindowTokens)}</dd></div>
-          <div><dt>Tokens this month</dt><dd>${model.weeklyTokensT >= 1 ? model.weeklyTokensT.toFixed(1) + 'T' : Math.round(model.weeklyTokensT * 1000) + 'B'}</dd></div>
+          ${model.weeklyTokensT ? `<div><dt>Tokens this month</dt><dd>${model.weeklyTokensT >= 1 ? model.weeklyTokensT.toFixed(1) + 'T' : Math.round(model.weeklyTokensT * 1000) + 'B'}</dd></div>` : ''}
         </dl>
         ${model.aa.effort ? `<p class="hint">AA variant: ${esc(model.aa.name)} (${esc(model.aa.effort)} effort)</p>` : ''}
         <p class="readout-links">
-          <a href="${model.aa.url}" target="_blank" rel="noopener">Artificial Analysis ↗</a>
-          <a href="https://opencode.ai/data" target="_blank" rel="noopener">OpenCode data ↗</a>
+          <a href="${(model.aa && model.aa.url) || ('https://artificialanalysis.ai/models/' + encodeURIComponent(model.id))}" target="_blank" rel="noopener">Artificial Analysis ↗</a>
+          <a href="https://models.dev" target="_blank" rel="noopener">models.dev ↗</a>
         </p>`;
       return;
     }
@@ -391,7 +396,7 @@
           ${list.map((m) => `<button type="button" class="chip" data-chip="${esc(m.id)}" aria-pressed="true">
             <span class="chip-dot" style="--chip-c:${m.hue}"></span>
             <span class="chip-name">${esc(m.label)}</span>
-            <span class="chip-rank">#${m.rank}</span>
+            ${m.rank ? `<span class="chip-rank">#${m.rank}</span>` : (m.aa ? `<span class="chip-rank">${m.aa.intelligenceIndex}</span>` : '')}
           </button>`).join('')}
         </div>
       </section>`;
@@ -466,8 +471,8 @@
     const tbody = document.querySelector('#sr-data-table tbody');
     if (!tbody) return;
     tbody.innerHTML = `
-      ${plotted.map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank}</td><td>${m.ocCostPerM}</td><td>${m.aa.intelligenceIndex}</td></tr>`).join('')}
-      ${excluded.map((m) => `<tr><td>${esc(m.label)} (not plottable)</td><td>${esc(m.author)}</td><td>${m.rank}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
+      ${plotted.map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa.intelligenceIndex}</td></tr>`).join('')}
+      ${excluded.map((m) => `<tr><td>${esc(m.label)} (not plottable)</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
   }
 
   // ---------- live data status stamp ----------
@@ -517,9 +522,9 @@
     } else {
       setChartLoading(false);
     }
-    if (res.state === 'live') setStamp('live', 'Live · OpenCode updated ' + fmtClock(res.ocUpdatedAt));
+    if (res.state === 'live') setStamp('live', 'Live · updated ' + fmtClock(res.ocUpdatedAt || res.fetchedAt));
     else if (res.state === 'cached') setStamp('live', 'Live · fetched ' + Math.max(1, Math.round((Date.now() - res.fetchedAt) / 60000)) + ' min ago');
-    else if (res.state === 'partial') setStamp('partial', 'Live + snapshot · ' + res.snapFallbacks + ' values from snapshot');
+    else if (res.state === 'partial') setStamp('partial', 'Live + snapshot · ' + (res.snapFallbacks || 0) + ' values from snapshot');
     else if (res.state === 'stale') setStamp('partial', 'Stale live data · fetched '
       + fmtAge(res.fetchedAt) + ' ago'
       + (res.refreshing ? ' · refreshing…' : ' · sources unreachable'));

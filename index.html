@@ -19,13 +19,9 @@
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- Warm the two data origins (always fetched) and resolve the relay hosts
-       (used on demand) so handshakes overlap with parsing, not precede it. -->
-  <link rel="preconnect" href="https://opencode.ai" />
+  <!-- Warm direct data origins -->
+  <link rel="preconnect" href="https://models.dev" />
   <link rel="preconnect" href="https://artificialanalysis.ai" />
-  <link rel="dns-prefetch" href="https://api.allorigins.win" />
-  <link rel="dns-prefetch" href="https://api.codetabs.com" />
-  <link rel="dns-prefetch" href="https://corsproxy.io" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f49e0'/%3E%3Cpath d='M6 22 L14 20 L22 10' stroke='%23fbfcfd' stroke-width='3' stroke-dasharray='5 3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
@@ -103,17 +99,15 @@
 
   <footer class="colophon">
     <div class="source-row">
-      <p><strong>X axis</strong> — USD per 1M output tokens, from the OpenCode “Token Cost” board
-        (model pages used where the board omits a model).</p>
-      <p><strong>Y axis</strong> — <span id="aa-index-name">Artificial Analysis Intelligence Index v4.1.1</span>,
-        independently measured by Artificial Analysis.</p>
+      <p><strong>X axis</strong> — USD per 1M output tokens, directly from <a href="https://models.dev" target="_blank" rel="noopener">models.dev</a>.</p>
+      <p><strong>Y axis</strong> — <span id="aa-index-name">Artificial Analysis Intelligence Index</span>,
+        independently measured by <a href="https://artificialanalysis.ai" target="_blank" rel="noopener">Artificial Analysis</a>.</p>
     </div>
     <p class="source-links" id="source-links"></p>
     <p class="source-links">Static page — no build step, no dependencies, MIT licensed. Code &amp; issues:
       <a href="https://github.com/werlang/model-value-map" target="_blank" rel="noopener">github.com/werlang/model-value-map</a></p>
     <p class="caveat">
-      Data is retrieved live from the Cloudflare Worker API (with fallback crawling of OpenCode
-      via CORS relays and Artificial Analysis directly) and cached in LocalStorage for 30 minutes.
+      Data is retrieved live from models.dev and Artificial Analysis in parallel and cached in LocalStorage for 30 minutes.
       Scores compare model variants as published (effort levels noted in the readout). Use ⟳ to force a refresh.
     </p>
   </footer>

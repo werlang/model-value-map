@@ -1,8 +1,0 @@
-name = "model-value-map-api"
-main = "worker/index.js"
-compatibility_date = "2024-09-23"
-
-# Cloudflare KV binding for persistent storage
-[[kv_namespaces]]
-binding = "model_value_map_KV"
-id = "8c55171381f749babc9f8adc03125adf"

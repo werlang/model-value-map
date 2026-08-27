@@ -13,33 +13,49 @@ export function uuid() {
   return ('a7f10000-0000-4000-8000-' + hex + '00000000').slice(0, 36);
 }
 
-// ---------- OpenCode shapes ----------
-export function modelRow(over = {}) {
-  return { model: 'kimi-k3', provider: 'moonshot', author: 'Moonshot', rank: 1, tokens: 210, ...over };
-}
-export function boardRow(over = {}) {
-  return { model: 'kimi-k3', total: 15, output: 15, input: 3, cached: 0.3, ...over };
-}
-/** OC /data HTML — must contain the literal markers the validators require. */
-export function ocHomeHtml({ rows = [], links = {} } = {}) {
-  // rows are re-parsed by the fake worker, so this HTML only needs to satisfy
-  // fetchText's validator (tokenCost + leaderboard) and carry hrefs for harvestOcLinks.
-  const hrefs = Object.entries(links)
-    .map(([seg, path]) => `<a href="${path ?? '/data/' + seg}">${seg}</a>`)
-    .join('');
-  return `<!-- tokenCost leaderboard -->${hrefs}`;
-}
-export function ocModelPageHtml() {
-  return '<script>if($R[0])console.log("hydration")</script>';
+// ---------- models.dev shapes ----------
+export function modelsDevCatalog(models = {}) {
+  return {
+    moonshot: {
+      name: 'Moonshot',
+      models: {
+        'kimi-k3': { name: 'Kimi K3', cost: { input: 3, output: 15, cache_read: 0.3 }, limit: { context: 1048576 }, open_weights: true, reasoning: true },
+        'kimi-k2.7-code': { name: 'Kimi K2.7 Code', cost: { input: 2, output: 18, cache_read: 0.4 }, limit: { context: 256000 }, open_weights: true, reasoning: true },
+        ...(models.moonshot || {}),
+      },
+    },
+    xiaomi: {
+      name: 'Xiaomi',
+      models: {
+        'mimo-v2.5': { name: 'MiMo-V2.5', cost: { input: 0.14, output: 0.28, cache_read: 0.003 }, limit: { context: 1000000 }, open_weights: true, reasoning: true },
+        ...(models.xiaomi || {}),
+      },
+    },
+    zhipu: {
+      name: 'Zhipu',
+      models: {
+        'glm-5.3': { name: 'GLM-5.3', cost: { input: 0.6, output: 5, cache_read: 0.1 }, limit: { context: 200000 }, open_weights: true, reasoning: true },
+        ...(models.zhipu || {}),
+      },
+    },
+    meta: {
+      name: 'Meta',
+      models: {
+        'muse-spark-1.2-contributor': { name: 'Muse Spark 1.2', cost: { input: 1, output: 4.25, cache_read: 0.1 }, limit: { context: 1048576 }, open_weights: false, reasoning: true },
+        ...(models.meta || {}),
+      },
+    },
+  };
 }
 
 // ---------- Artificial Analysis flight shapes ----------
 export function aaModel(over = {}) {
+  const shortName = over.shortName ?? 'Kimi K3';
   return {
     id: uuid(),
     slug: 'kimi-k3',
-    shortName: 'Kimi K3',
-    name: 'Kimi K3',
+    shortName,
+    name: over.name ?? shortName,
     intelligenceIndex: 59.7,
     effort: null,
     isOpenWeights: true,
@@ -81,22 +97,6 @@ function snapModel(over) {
   return m;
 }
 
-/** Default happy-path worker handler for a standard OC home + optional pages. */
-export function defaultWorker({ home, pagesByModel = {} }) {
-  return (jobs) =>
-    jobs.map((job) =>
-      job.id === 'home'
-        ? { id: job.id, result: { home, info: null } }
-        : pagesByModel[job.id]
-          ? { id: job.id, result: { home: null, info: pagesByModel[job.id] } }
-          : { id: job.id, error: 'no such fixture page' });
-}
-
-/** Standard OC home payload for the default worker handler. */
-export function homeFrom(rows, board, updatedAt = '2026-08-24T10:00:00Z') {
-  return { updatedAt, leaderboard: rows, tokenCost: board };
-}
-
 /** Two fully-covered plottable models — lets clean runs reach state 'live'. */
 export function tinySnapshot() {
   return [
@@ -117,17 +117,9 @@ export function tinySnapshot() {
   ];
 }
 
-/** Rows/board/records covering tinySnapshot end-to-end through live data. */
+/** Records covering tinySnapshot end-to-end through live data. */
 export function tinyCoverage() {
   return {
-    rows: [
-      modelRow({ model: 'kimi-k3', provider: 'moonshot', author: 'Moonshot', rank: 1, tokens: 210 }),
-      modelRow({ model: 'mimo-v2.5', provider: 'xiaomi', author: 'Xiaomi', rank: 2, tokens: 12610 }),
-    ],
-    board: [
-      boardRow({ model: 'kimi-k3', total: 15, output: 15, input: 3, cached: 0.3 }),
-      boardRow({ model: 'mimo-v2.5', total: 0.28, output: 0.28, input: 0.14, cached: 0.003 }),
-    ],
     aaRecords: [
       aaModel({ slug: 'kimi-k3', shortName: 'Kimi K3', name: 'Kimi K3', intelligenceIndex: 59.7, effort: { label: 'max' }, isOpenWeights: true }),
       aaModel({ slug: 'mimo-v2-5-0424', shortName: 'MiMo-V2.5', name: 'MiMo-V2.5 0424', intelligenceIndex: 38.04, isOpenWeights: true }),

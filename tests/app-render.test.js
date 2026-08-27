@@ -1,16 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { standardEnv, OC_INDEX, AA_INDEX } from './helpers/setup-live.js';
+import { standardEnv, MODELS_DEV, AA_INDEX } from './helpers/setup-live.js';
 import { makeStorage } from './helpers/storage.js';
 import { DEFAULT_CLOCK_START } from './helpers/sandbox.js';
 import {
   snapshot as fullSnapshot, tinySnapshot, tinyCoverage,
-  homeFrom, defaultWorker, aaIndexHtml,
+  aaIndexHtml, modelsDevCatalog,
 } from './helpers/fixtures.js';
-import { FakeWorker } from './helpers/fake-worker.js';
 
 const MIN = 60 * 1000;
-const OFFLINE = { ocIndexRule: { test: OC_INDEX, fail: true }, aaIndexRule: { test: AA_INDEX, fail: true } };
+const OFFLINE = { modelsDevRule: { test: MODELS_DEV, fail: true }, aaIndexRule: { test: AA_INDEX, fail: true } };
 
 function page(over = {}) {
   const models = over.models ?? fullSnapshot();
@@ -41,6 +40,11 @@ test('offline boot paints the snapshot: four plotted dots with a11y attributes',
     assert.equal(d.getAttribute('tabindex'), '0');
     assert.equal(d.getAttribute('role'), 'img');
     assert.ok(d.getAttribute('aria-label').includes('per million tokens'));
+    const mark = d.querySelector('.dot-mark');
+    assert.ok(mark);
+    const r = parseFloat(mark.getAttribute('r'));
+    assert.ok(!isNaN(r) && r > 0, 'dot radius must be a valid positive number');
+    assert.ok(!mark.style.animationDelay.includes('NaN'), 'animationDelay must not be NaN');
   }
 });
 
@@ -242,8 +246,6 @@ test('failed live fetch stamps the snapshot fallback state', async () => {
 
 async function happyPage(storage) {
   const cov = tinyCoverage();
-  FakeWorker.reset();
-  FakeWorker.handler = defaultWorker({ home: homeFrom(cov.rows, cov.board) });
   const env = page({
     models: tinySnapshot(),
     coverage: cov,
@@ -253,29 +255,14 @@ async function happyPage(storage) {
   return env;
 }
 
-test('a successful live fetch stamps the live state with the OC clock', async () => {
+test('a successful live fetch stamps the live state', async () => {
   const env = await happyPage();
   await env.sb.settle();
   const stamp = env.sb.el('stamp');
   assert.ok(stamp.classList.contains('live'));
-  assert.equal(env.sb.el('stamp-text').textContent, 'Live · OpenCode updated 10:00 UTC');
+  assert.match(env.sb.el('stamp-text').textContent, /Live · updated/);
   // live data replaced the roster
   assert.equal(dotsOf(env).length, 2);
-});
-
-test('partial coverage stamps how many values came from the snapshot', async () => {
-  const models = tinySnapshot();
-  const cov = tinyCoverage();
-  cov.board = [cov.board[0]];          // mimo loses board row
-  cov.aaRecords = [cov.aaRecords[0]];  // mimo unscored live
-  FakeWorker.reset();
-  FakeWorker.handler = defaultWorker({ home: homeFrom(cov.rows, cov.board) });
-  const env = page({ models, coverage: cov, loadApp: true });
-
-  await env.sb.settle();
-  const stamp = env.sb.el('stamp');
-  assert.ok(stamp.classList.contains('partial'));
-  assert.equal(env.sb.el('stamp-text').textContent, 'Live + snapshot · 2 values from snapshot');
 });
 
 test('cached loads stamp their age in minutes', async () => {
@@ -290,7 +277,7 @@ test('cached loads stamp their age in minutes', async () => {
   assert.equal(later.sb.el('stamp-text').textContent, 'Live · fetched 2 min ago');
 });
 
-test('stale lastgood renders with the stale stamp when OpenCode is unreachable', async () => {
+test('stale lastgood renders with the stale stamp when origins are unreachable', async () => {
   const storage = makeStorage();
   const seeded = await happyPage(storage);
   await seeded.sb.settle();
@@ -320,11 +307,9 @@ test('the ⟳ button recovers a failed boot into a live one (force refresh)', as
 
   // sources come back online — new rules must PRECEDE the failing ones
   const cov = tinyCoverage();
-  FakeWorker.reset();
-  FakeWorker.handler = defaultWorker({ home: homeFrom(cov.rows, cov.board) });
   env.fetch.rules.unshift(
-    { test: /^https:\/\/opencode\.ai\/data$/, body: '<!-- tokenCost leaderboard -->' },
-    { test: /^https:\/\/artificialanalysis\.ai\/models$/, body: aaIndexHtml(cov.aaRecords) },
+    { test: MODELS_DEV, json: modelsDevCatalog() },
+    { test: AA_INDEX, body: aaIndexHtml(cov.aaRecords) },
   );
 
   env.sb.el('stamp-refresh').dispatch('click', { target: env.sb.el('stamp-refresh') });
@@ -337,7 +322,7 @@ test('an in-flight fetch shows the loading state with a disabled ⟳ and visible
   const env = page({
     loadApp: true,
     models: tinySnapshot(),
-    ocIndexRule: { test: OC_INDEX, hang: true },
+    modelsDevRule: { test: MODELS_DEV, hang: true },
   });
   await env.sb.settle();
   assert.equal(env.sb.el('stamp-text').textContent, 'Fetching live data…');

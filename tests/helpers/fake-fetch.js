@@ -27,7 +27,7 @@ export function makeFetch(rules = []) {
     if (rule.oncall) rule.oncall(url, opts);
     if (rule.hang) return new Promise(() => {}); // never settles — loading states
     const status = rule.status ?? 200;
-    const body = typeof rule.body === 'function' ? rule.body(opts) : (rule.body ?? '');
+    const body = typeof rule.body === 'function' ? rule.body(opts) : (rule.json !== undefined ? JSON.stringify(rule.json) : (rule.body ?? ''));
     return {
       ok: status >= 200 && status < 300,
       status,
