@@ -116,8 +116,8 @@
   let cur = null; // live scales + crosshair layer for setActive
 
   function render() {
-    const w = Math.max(320, holder.clientWidth);
-    const h = Math.round(Math.min(680, Math.max(380, w * 0.56)));
+    const w = Math.max(320, holder.clientWidth || 320);
+    const h = holder.clientHeight > 100 ? holder.clientHeight : Math.round(Math.min(680, Math.max(380, w * 0.56)));
     const { xd, yd, xt, yt } = computeDomains();
     const { x, y, iw, ih } = makeScales(w, h, xd, yd);
 
