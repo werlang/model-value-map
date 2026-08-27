@@ -270,21 +270,30 @@
     const { x, y, gCross, bottom, left } = cur;
     // crosshair layer (kept outside dot groups so bboxes stay tight)
     gCross.replaceChildren();
-    if (on) {
+    if (on && g) {
+      if (g.parentElement) {
+        g.parentElement.appendChild(g);
+      }
+      g.classList.add('is-active');
       const m = MODELS.find((mm) => mm.id === id);
-      const cx = x(m.ocCostPerM), cy = y(m.aa.intelligenceIndex);
-      const NS = 'http://www.w3.org/2000/svg';
-      const vx = document.createElementNS(NS, 'line');
-      vx.setAttribute('class', 'dot-cross-x');
-      vx.setAttribute('x1', cx); vx.setAttribute('y1', cy);
-      vx.setAttribute('x2', cx); vx.setAttribute('y2', bottom);
-      const hy = document.createElementNS(NS, 'line');
-      hy.setAttribute('class', 'dot-cross-y');
-      hy.setAttribute('x1', cx); hy.setAttribute('y1', cy);
-      hy.setAttribute('x2', left); hy.setAttribute('y2', cy);
-      gCross.append(vx, hy);
+      if (m) {
+        const cx = x(m.ocCostPerM), cy = y(m.aa.intelligenceIndex);
+        const NS = 'http://www.w3.org/2000/svg';
+        const vx = document.createElementNS(NS, 'line');
+        vx.setAttribute('class', 'dot-cross-x');
+        vx.setAttribute('x1', cx); vx.setAttribute('y1', cy);
+        vx.setAttribute('x2', cx); vx.setAttribute('y2', bottom);
+        const hy = document.createElementNS(NS, 'line');
+        hy.setAttribute('class', 'dot-cross-y');
+        hy.setAttribute('x1', cx); hy.setAttribute('y1', cy);
+        hy.setAttribute('x2', left); hy.setAttribute('y2', cy);
+        gCross.append(vx, hy);
+      }
+    } else if (g) {
+      g.classList.remove('is-active');
     }
-    g.querySelector('.dot-ring').style.opacity = on ? 1 : 0;
+    const ring = g ? g.querySelector('.dot-ring') : null;
+    if (ring) ring.style.opacity = on ? 1 : 0;
     if (on && id !== activeId) {
       activeId = id;
       const visible = plotted.filter((m) => !hidden.has(m.id));
@@ -366,9 +375,11 @@
     }).join('');
   }
 
-  // ---------- toggles ----------
+  // ---------- toggles with sort switcher ----------
+  let currentSort = 'score'; // 'score' | 'cost' | 'provider'
   let labOrder = [];
   let byLab = new Map();
+
   function regroup() {
     labOrder = [];
     byLab = new Map();
@@ -376,6 +387,63 @@
       if (!byLab.has(m.author)) { byLab.set(m.author, []); labOrder.push(m.author); }
       byLab.get(m.author).push(m);
     }
+
+    // Sort models within each lab
+    for (const [, list] of byLab) {
+      list.sort((a, b) => {
+        if (currentSort === 'score') {
+          const sA = (a.aa && typeof a.aa.intelligenceIndex === 'number') ? a.aa.intelligenceIndex : -1;
+          const sB = (b.aa && typeof b.aa.intelligenceIndex === 'number') ? b.aa.intelligenceIndex : -1;
+          if (sB !== sA) return sB - sA;
+          return (a.ocCostPerM ?? Infinity) - (b.ocCostPerM ?? Infinity);
+        }
+        if (currentSort === 'cost') {
+          const cA = (typeof a.ocCostPerM === 'number' && a.ocCostPerM > 0) ? a.ocCostPerM : Infinity;
+          const cB = (typeof b.ocCostPerM === 'number' && b.ocCostPerM > 0) ? b.ocCostPerM : Infinity;
+          if (cA !== cB) return cA - cB;
+          const sA = (a.aa && typeof a.aa.intelligenceIndex === 'number') ? a.aa.intelligenceIndex : -1;
+          const sB = (b.aa && typeof b.aa.intelligenceIndex === 'number') ? b.aa.intelligenceIndex : -1;
+          return sB - sA;
+        }
+        return (a.label || '').localeCompare(b.label || '');
+      });
+    }
+
+    // Sort lab groups
+    labOrder.sort((a, b) => {
+      if (currentSort === 'provider') {
+        return a.localeCompare(b);
+      }
+      if (currentSort === 'score') {
+        const topA = Math.max(...byLab.get(a).map((m) => (m.aa && typeof m.aa.intelligenceIndex === 'number') ? m.aa.intelligenceIndex : -1));
+        const topB = Math.max(...byLab.get(b).map((m) => (m.aa && typeof m.aa.intelligenceIndex === 'number') ? m.aa.intelligenceIndex : -1));
+        if (topB !== topA) return topB - topA;
+        return a.localeCompare(b);
+      }
+      if (currentSort === 'cost') {
+        const minA = Math.min(...byLab.get(a).map((m) => (typeof m.ocCostPerM === 'number' && m.ocCostPerM > 0) ? m.ocCostPerM : Infinity));
+        const minB = Math.min(...byLab.get(b).map((m) => (typeof m.ocCostPerM === 'number' && m.ocCostPerM > 0) ? m.ocCostPerM : Infinity));
+        if (minA !== minB) return minA - minB;
+        return a.localeCompare(b);
+      }
+      return 0;
+    });
+  }
+
+  function chipBadge(m) {
+    if (currentSort === 'cost' && typeof m.ocCostPerM === 'number') {
+      return `$${m.ocCostPerM}`;
+    }
+    if (currentSort === 'score' && m.aa && typeof m.aa.intelligenceIndex === 'number') {
+      return `${m.aa.intelligenceIndex}`;
+    }
+    if (m.rank) {
+      return `#${m.rank}`;
+    }
+    if (m.aa && typeof m.aa.intelligenceIndex === 'number') {
+      return `${m.aa.intelligenceIndex}`;
+    }
+    return '';
   }
 
   function renderToggles() {
@@ -395,7 +463,7 @@
           ${list.map((m) => `<button type="button" class="chip" data-chip="${esc(m.id)}" aria-pressed="true">
             <span class="chip-dot" style="--chip-c:${m.hue}"></span>
             <span class="chip-name">${esc(m.label)}</span>
-            ${m.rank ? `<span class="chip-rank">#${m.rank}</span>` : (m.aa ? `<span class="chip-rank">${m.aa.intelligenceIndex}</span>` : '')}
+            <span class="chip-rank">${chipBadge(m)}</span>
           </button>`).join('')}
         </div>
       </section>`;
@@ -417,6 +485,21 @@
   }
 
   function wireToggleHandlers() {
+    const sortBtns = document.querySelectorAll('.sort-btn');
+    sortBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sortKey = btn.dataset.sort;
+        if (!sortKey || sortKey === currentSort) return;
+        currentSort = sortKey;
+        sortBtns.forEach((b) => {
+          const isActive = b.dataset.sort === currentSort;
+          b.classList.toggle('active', isActive);
+          b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        renderToggles();
+      });
+    });
+
     togglesEl.addEventListener('click', (e) => {
       const chipBtn = e.target.closest('[data-chip]');
       if (chipBtn) {
@@ -470,7 +553,7 @@
     const tbody = document.querySelector('#sr-data-table tbody');
     if (!tbody) return;
     tbody.innerHTML = `
-      ${plotted.map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa.intelligenceIndex}</td></tr>`).join('')}
+      ${plotted.map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}
       ${excluded.map((m) => `<tr><td>${esc(m.label)} (not plottable)</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
   }
 

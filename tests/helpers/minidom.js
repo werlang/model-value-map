@@ -61,6 +61,9 @@ export class El {
     };
   }
 
+  get parentElement() { return this.parent; }
+  get parentNode() { return this.parent; }
+
   get className() { return this.attrs.class || ''; }
   set className(v) { this.classList.set.clear(); this.classList.seed(v); this.classList._sync(); }
 
@@ -75,7 +78,12 @@ export class El {
   set id(v) { this.setAttribute('id', v); }
 
   appendChild(node) {
-    if (node && node.kind === 'text') { this.children.push(node); node.parent = this; return node; }
+    if (!node) return null;
+    if (node.parent && node.parent.children) {
+      const idx = node.parent.children.indexOf(node);
+      if (idx >= 0) node.parent.children.splice(idx, 1);
+    }
+    if (node.kind === 'text') { this.children.push(node); node.parent = this; return node; }
     node.parent = this;
     this.children.push(node);
     return node;
@@ -215,6 +223,11 @@ export const PAGE_SKELETON = `
   <ul class="excluded-list" id="excluded-list"></ul>
   <section class="toggles-panel">
     <p class="panel-sub" id="visible-count"></p>
+    <div class="toggles-switcher">
+      <button type="button" class="sort-btn active" data-sort="score" aria-pressed="true">Score</button>
+      <button type="button" class="sort-btn" data-sort="cost" aria-pressed="false">Cost</button>
+      <button type="button" class="sort-btn" data-sort="provider" aria-pressed="false">Provider</button>
+    </div>
     <div id="toggles"></div>
   </section>
   <p class="source-links" id="source-links"></p>

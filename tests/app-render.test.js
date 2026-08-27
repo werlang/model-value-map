@@ -117,6 +117,51 @@ test('the screen-reader table carries plotted and excluded rows', async () => {
   assert.match(html, /\(not plottable\)/);
 });
 
+test('models switcher sorts toggle chips and lab groups by score, cost, and provider', async () => {
+  const env = await bootOffline();
+  const costBtn = env.sb.document.querySelector('.sort-btn[data-sort="cost"]');
+  const provBtn = env.sb.document.querySelector('.sort-btn[data-sort="provider"]');
+  const scoreBtn = env.sb.document.querySelector('.sort-btn[data-sort="score"]');
+
+  // Switch to Cost
+  costBtn.dispatch('click');
+  assert.equal(costBtn.getAttribute('aria-pressed'), 'true');
+  let firstLab = env.sb.el('toggles').querySelector('.lab-name').textContent;
+  let firstChip = env.sb.el('toggles').querySelector('.chip-name').textContent;
+  // Lowest cost plotted in snapshot is Xiaomi (MiMo-V2.5 @ $0.28)
+  assert.equal(firstLab, 'Xiaomi');
+  assert.equal(firstChip, 'MiMo-V2.5');
+
+  // Switch to Provider (Alphabetical)
+  provBtn.dispatch('click');
+  assert.equal(provBtn.getAttribute('aria-pressed'), 'true');
+  firstLab = env.sb.el('toggles').querySelector('.lab-name').textContent;
+  // Alphabetical first in snapshot is Meta
+  assert.equal(firstLab, 'Meta');
+
+  // Switch back to Score
+  scoreBtn.dispatch('click');
+  assert.equal(scoreBtn.getAttribute('aria-pressed'), 'true');
+  firstLab = env.sb.el('toggles').querySelector('.lab-name').textContent;
+  firstChip = env.sb.el('toggles').querySelector('.chip-name').textContent;
+  // Highest score in snapshot is Moonshot (Kimi K3 @ 59.7)
+  assert.equal(firstLab, 'Moonshot');
+  assert.equal(firstChip, 'Kimi K3');
+});
+
+test('hovering a model dot brings it to the front and activates highlight', async () => {
+  const env = await bootOffline();
+  const dot = dotOf(env, 'kimi-k3');
+  const parent = dot.parentElement;
+  
+  dot.dispatch('pointerenter');
+  assert.ok(dot.classList.contains('is-active'));
+  assert.equal(parent.children[parent.children.length - 1], dot); // brought to front
+
+  dot.dispatch('pointerleave');
+  assert.ok(!dot.classList.contains('is-active'));
+});
+
 test('boot produces no console errors', async () => {
   const env = await bootOffline();
   assert.equal(env.sb.consoleCalls.error.length, 0);
