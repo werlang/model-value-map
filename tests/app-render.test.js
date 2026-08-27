@@ -152,14 +152,15 @@ test('models switcher sorts toggle chips and lab groups by score, cost, and prov
 test('hovering a model dot brings it to the front and activates highlight', async () => {
   const env = await bootOffline();
   const dot = dotOf(env, 'kimi-k3');
-  const parent = dot.parentElement;
+  const gTop = env.sb.document.querySelector('.layer-top');
   
   dot.dispatch('pointerenter');
   assert.ok(dot.classList.contains('is-active'));
-  assert.equal(parent.children[parent.children.length - 1], dot); // brought to front
+  assert.ok(gTop.children.length > 0); // brought to front via top layer overlay
 
   dot.dispatch('pointerleave');
   assert.ok(!dot.classList.contains('is-active'));
+  assert.equal(gTop.children.length, 0);
 });
 
 test('boot produces no console errors', async () => {

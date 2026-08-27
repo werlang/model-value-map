@@ -144,9 +144,12 @@
     svg.appendChild(defs);
 
     const gGrid = el('g'); const gZone = el('g');
-    const gCross = el('g'); const gDots = el('g'); const gAxes = el('g');
-    svg.append(gGrid, gZone, gCross, gAxes, gDots);
-    cur = { x, y, gCross, bottom: M.top + ih, left: M.left };
+    const gCross = el('g'); const gAxes = el('g');
+    const gDots = el('g', 'layer-dots');
+    const gTop = el('g', 'layer-top');
+    gTop.setAttribute('pointer-events', 'none');
+    svg.append(gGrid, gZone, gCross, gAxes, gDots, gTop);
+    cur = { x, y, gCross, gTop, bottom: M.top + ih, left: M.left, w, frontier, frontierIds };
 
     function el(name, cls) {
       const n = document.createElementNS(NS, name);
@@ -267,16 +270,18 @@
   }
 
   function setActive(id, g, on) {
-    const { x, y, gCross, bottom, left } = cur;
-    // crosshair layer (kept outside dot groups so bboxes stay tight)
+    const { x, y, gCross, gTop, bottom, left, w, frontierIds } = cur;
     gCross.replaceChildren();
-    if (on && g) {
-      if (g.parentElement) {
-        g.parentElement.appendChild(g);
+    if (gTop) gTop.replaceChildren();
+
+    if (on && id) {
+      if (g) {
+        g.classList.add('is-active');
+        const ring = g.querySelector('.dot-ring');
+        if (ring) ring.style.opacity = 1;
       }
-      g.classList.add('is-active');
       const m = MODELS.find((mm) => mm.id === id);
-      if (m) {
+      if (m && m.ocCostPerM != null && m.aa && typeof m.aa.intelligenceIndex === 'number') {
         const cx = x(m.ocCostPerM), cy = y(m.aa.intelligenceIndex);
         const NS = 'http://www.w3.org/2000/svg';
         const vx = document.createElementNS(NS, 'line');
@@ -288,20 +293,51 @@
         hy.setAttribute('x1', cx); hy.setAttribute('y1', cy);
         hy.setAttribute('x2', left); hy.setAttribute('y2', cy);
         gCross.append(vx, hy);
+
+        if (gTop) {
+          const r = radius(m.weeklyTokensT);
+          const topG = document.createElementNS(NS, 'g');
+          topG.setAttribute('class', 'dot-point is-active' + (frontierIds.has(m.id) ? ' frontier-member' : ''));
+          topG.setAttribute('transform', `translate(${cx},${cy})`);
+
+          const mark = document.createElementNS(NS, 'circle');
+          mark.setAttribute('class', 'dot-mark');
+          mark.setAttribute('r', r.toFixed(1));
+          mark.setAttribute('fill', m.hue || '#3B5BDB');
+          mark.style.stroke = 'var(--ink)';
+          mark.style.strokeWidth = '2.5px';
+
+          const topRing = document.createElementNS(NS, 'circle');
+          topRing.setAttribute('class', 'dot-ring');
+          topRing.setAttribute('r', (r + 4.5).toFixed(1));
+          topRing.style.opacity = 1;
+
+          topG.append(mark, topRing);
+
+          if (w >= 640) {
+            const [dx, dy, anch] = LABEL_HINTS[m.id] || [12, -8, 'start'];
+            const txt = document.createElementNS(NS, 'text');
+            txt.setAttribute('class', 'dot-label');
+            txt.setAttribute('x', dx);
+            txt.setAttribute('y', dy);
+            if (anch) txt.setAttribute('text-anchor', anch);
+            txt.style.fontWeight = '700';
+            txt.style.fill = 'var(--ink)';
+            txt.textContent = m.label;
+            topG.appendChild(txt);
+          }
+          gTop.appendChild(topG);
+        }
       }
-    } else if (g) {
-      g.classList.remove('is-active');
-    }
-    const ring = g ? g.querySelector('.dot-ring') : null;
-    if (ring) ring.style.opacity = on ? 1 : 0;
-    if (on && id !== activeId) {
       activeId = id;
-      const visible = plotted.filter((m) => !hidden.has(m.id));
-      renderReadout(MODELS.find((mm) => mm.id === id), frontierOf(visible));
-    } else if (!on && activeId === id) {
-      activeId = null;
-      const visible = plotted.filter((m) => !hidden.has(m.id));
-      renderReadout(null, frontierOf(visible));
+      const visible = plotted.filter((mm) => !hidden.has(mm.id));
+      renderReadout(m, frontierOf(visible));
+    } else if (!on) {
+      if (g) {
+        g.classList.remove('is-active');
+        const ring = g.querySelector('.dot-ring');
+        if (ring) ring.style.opacity = 0;
+      }
     }
   }
 
