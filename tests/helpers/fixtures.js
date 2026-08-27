@@ -56,6 +56,7 @@ export function aaModel(over = {}) {
     slug: 'kimi-k3',
     shortName,
     name: over.name ?? shortName,
+    creator: over.creator ?? { name: 'Moonshot AI', slug: 'moonshot', color: '#9C36B5' },
     intelligenceIndex: 59.7,
     effort: null,
     isOpenWeights: true,

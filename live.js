@@ -77,99 +77,6 @@ window.LiveData = (function () {
     return -1;
   }
 
-  const AGGREGATOR_KEYS = [
-    'nanogpt', 'nano-gpt', 'openrouter', 'deepinfra', 'groq', 'together', 'togetherai',
-    'fireworks', 'fireworks-ai', 'novita', 'hyperbolic', 'replicate', 'anyscale',
-    'scaleway', 'parasail', 'klusterai', 'router', '302ai', 'requesty', 'mixlayer',
-    'neuralwatt', 'edenai', 'nebius', 'chutes', 'cerebras', 'sambanova', 'glhf',
-    'huggingface', 'featherless', 'friendliai', 'lepton', 'siliconflow', 'plan', 'coding'
-  ];
-
-  function labFor(id, name, family, providerKey, providerName) {
-    const modelStr = `${id || ''} ${name || ''} ${family || ''}`.toLowerCase();
-
-    // 1. Explicit model name / family / id match (highest precedence)
-    if (/\b(glm|chatglm|codegeex|cogvideo|zhipu)\b/i.test(modelStr) || modelStr.startsWith('glm-') || modelStr.includes('glm-') || modelStr.includes('zhipu')) return 'Zhipu AI';
-    if (/\b(deepseek|deepseek-ai|deepseek-v|deepseek-r|deepseek-coder)\b/i.test(modelStr) || modelStr.includes('deepseek')) return 'DeepSeek';
-    if (/\b(claude|anthropic)\b/i.test(modelStr) || modelStr.includes('claude')) return 'Anthropic';
-    if (/\b(gpt|o1|o3|o4|chatgpt|openai|dall-e|sora|whisper|text-embedding)\b/i.test(modelStr) || modelStr.startsWith('gpt-') || modelStr.startsWith('openai/')) return 'OpenAI';
-    if (/\b(gemini|gemma|palm|google)\b/i.test(modelStr) || modelStr.includes('gemini') || modelStr.includes('gemma')) return 'Google';
-    if (/\b(kimi|moonshot|moonshotai)\b/i.test(modelStr) || modelStr.includes('kimi') || modelStr.includes('moonshot')) return 'Moonshot AI';
-    if (/\b(qwen|alibaba|tongyi|wanx)\b/i.test(modelStr) || modelStr.includes('qwen')) return 'Alibaba';
-    if (/\b(mimo|xiaomi)\b/i.test(modelStr) || modelStr.includes('mimo') || modelStr.includes('xiaomi')) return 'Xiaomi';
-    if (/\b(minimax|abab|minimaxai)\b/i.test(modelStr) || modelStr.includes('minimax')) return 'MiniMax';
-    if (/\b(grok|xai)\b/i.test(modelStr) || modelStr.includes('grok')) return 'xAI';
-    if (/\b(nemotron|nvidia|cosmos)\b/i.test(modelStr) || modelStr.includes('nemotron')) return 'Nvidia';
-    if (/\b(mistral|mixtral|codestral|ministral|pixtral|devstral)\b/i.test(modelStr) || modelStr.includes('mistral')) return 'Mistral';
-    if (/\b(llama|meta|muse)\b/i.test(modelStr) || modelStr.includes('llama') || modelStr.includes('muse')) return 'Meta';
-    if (/\b(hunyuan|tencent|hy3)\b/i.test(modelStr) || modelStr.includes('hunyuan')) return 'Tencent';
-    if (/\b(cohere|command-r|command-a|command-plus|aya)\b/i.test(modelStr) || modelStr.includes('command-')) return 'Cohere';
-    if (/\b(stepfun|step-)\b/i.test(modelStr)) return 'StepFun';
-    if (/\b(solar|upstage)\b/i.test(modelStr)) return 'Upstage';
-    if (/\b(jamba|ai21)\b/i.test(modelStr)) return 'AI21 Labs';
-    if (/\b(doubao|bytedance|skylark)\b/i.test(modelStr) || modelStr.includes('doubao')) return 'ByteDance';
-    if (/\b(ernie|baidu)\b/i.test(modelStr) || modelStr.includes('ernie')) return 'Baidu';
-    if (/\b(amazon|nova|titan|bedrock)\b/i.test(modelStr) || modelStr.startsWith('nova-')) return 'Amazon';
-    if (/\b(phi|phi-3|phi-4|wizardlm|microsoft)\b/i.test(modelStr)) return 'Microsoft';
-    if (/\b(dbrx|databricks)\b/i.test(modelStr)) return 'Databricks';
-    if (/\b(internlm|shanghai)\b/i.test(modelStr)) return 'Shanghai AI Lab';
-    if (/\b(yi-|yi_01|01-ai|01.ai)\b/i.test(modelStr)) return '01.AI';
-    if (/\b(perplexity|sonar)\b/i.test(modelStr)) return 'Perplexity';
-
-    // Check organization prefix in "org/model"
-    if (id && id.includes('/')) {
-      const org = id.split('/')[0].toLowerCase();
-      if (org === 'meta-llama' || org === 'meta') return 'Meta';
-      if (org === 'google') return 'Google';
-      if (org === 'anthropic') return 'Anthropic';
-      if (org === 'openai') return 'OpenAI';
-      if (org === 'deepseek-ai' || org === 'deepseek') return 'DeepSeek';
-      if (org === 'zhipuai' || org === 'zai-org' || org === 'thudm' || org === 'zhipu') return 'Zhipu AI';
-      if (org === 'qwen' || org === 'alibaba') return 'Alibaba';
-      if (org === 'mistralai' || org === 'mistral') return 'Mistral';
-      if (org === 'nvidia') return 'Nvidia';
-      if (org === 'cohere') return 'Cohere';
-      if (org === 'moonshotai' || org === 'moonshot') return 'Moonshot AI';
-      if (org === 'minimax') return 'MiniMax';
-      if (org === 'bytedance') return 'ByteDance';
-      if (org === 'microsoft') return 'Microsoft';
-    }
-
-    // 2. First-party provider matches (skip aggregators/routers)
-    const provStr = `${providerKey || ''} ${providerName || ''}`.toLowerCase();
-    const isAggregator = AGGREGATOR_KEYS.some((k) => provStr.includes(k));
-
-    if (!isAggregator) {
-      if (provStr.includes('openai')) return 'OpenAI';
-      if (provStr.includes('anthropic')) return 'Anthropic';
-      if (provStr.includes('google')) return 'Google';
-      if (provStr.includes('deepseek')) return 'DeepSeek';
-      if (provStr.includes('moonshot')) return 'Moonshot AI';
-      if (provStr.includes('zhipu') || provStr.includes('zai')) return 'Zhipu AI';
-      if (provStr.includes('alibaba') || provStr.includes('qwen')) return 'Alibaba';
-      if (provStr.includes('xiaomi') || provStr.includes('mimo')) return 'Xiaomi';
-      if (provStr.includes('minimax')) return 'MiniMax';
-      if (provStr.includes('xai')) return 'xAI';
-      if (provStr.includes('nvidia')) return 'Nvidia';
-      if (provStr.includes('mistral')) return 'Mistral';
-      if (provStr.includes('meta')) return 'Meta';
-      if (provStr.includes('tencent')) return 'Tencent';
-      if (provStr.includes('cohere')) return 'Cohere';
-      if (provStr.includes('stepfun')) return 'StepFun';
-      if (provStr.includes('upstage')) return 'Upstage';
-      if (provStr.includes('ai21')) return 'AI21 Labs';
-      if (provStr.includes('bytedance')) return 'ByteDance';
-      if (provStr.includes('baidu')) return 'Baidu';
-      if (provStr.includes('microsoft')) return 'Microsoft';
-      if (provStr.includes('amazon')) return 'Amazon';
-      if (providerName && providerName !== 'Default' && !providerName.toLowerCase().includes('plan')) {
-        return providerName;
-      }
-    }
-
-    return 'AI Lab';
-  }
-
   function scanAaModels(flight) {
     const out = new Map();
     if (!flight || typeof flight !== 'string') return out;
@@ -185,8 +92,8 @@ window.LiveData = (function () {
             slug: o.slug,
             shortName: o.shortName,
             name: o.name || o.shortName,
-            creator: (o.creator && (o.creator.name || o.creator.slug)) || null,
-            creatorSlug: (o.creator && o.creator.slug) || null,
+            creator: (o.creator && (o.creator.name || o.creator.slug)) || (typeof o.creator === 'string' ? o.creator : null),
+            creatorColor: (o.creator && o.creator.color) || null,
             intelligenceIndex: Math.round(o.intelligenceIndex * 100) / 100,
             effort: (o.effort && o.effort.label) || null,
             isOpenWeights: !!o.isOpenWeights,
@@ -211,7 +118,7 @@ window.LiveData = (function () {
             shortName: shortName,
             name: rawLabel,
             creator: null,
-            creatorSlug: null,
+            creatorColor: null,
             intelligenceIndex: Math.round(score * 100) / 100,
             effort: effort,
             isOpenWeights: false,
@@ -224,10 +131,11 @@ window.LiveData = (function () {
     return out;
   }
 
-  // ---------- models.dev catalog parsing ----------
+  // ---------- models.dev catalog parsing (cost & limits only) ----------
   function parseModelsDev(data) {
     const map = new Map();
     if (!data || typeof data !== 'object') return map;
+
     const firstParty = [
       'openai', 'anthropic', 'google', 'deepseek', 'meta', 'mistral', 'cohere',
       'moonshot', 'moonshotai', 'zhipu', 'zhipuai', 'nvidia', 'xiaomi', 'alibaba',
@@ -245,7 +153,6 @@ window.LiveData = (function () {
     for (const providerKey of provKeys) {
       const providerObj = data[providerKey];
       if (!providerObj || typeof providerObj !== 'object') continue;
-      const provName = providerObj.name || providerKey;
       const models = providerObj.models;
       if (!models || typeof models !== 'object') continue;
 
@@ -264,11 +171,9 @@ window.LiveData = (function () {
           : (typeof cost.cacheWrite === 'number' && Number.isFinite(cost.cacheWrite) ? cost.cacheWrite : null);
         const limitContext = m.limit && typeof m.limit.context === 'number' && Number.isFinite(m.limit.context) ? m.limit.context : null;
         const limitOutput = m.limit && typeof m.limit.output === 'number' && Number.isFinite(m.limit.output) ? m.limit.output : null;
-        const author = labFor(m.id || mKey, m.name, m.family, providerKey, provName);
         const info = {
           id: m.id || mKey,
           name: m.name || mKey,
-          author,
           cost: {
             input: inCost,
             output: outCost,
@@ -387,11 +292,7 @@ window.LiveData = (function () {
       const snap = snapById ? snapById.get(slug) || snapById.get(lookupKey) : null;
 
       const cost = md && md.cost ? md.cost.output : (snap && snap.ocCostPerM != null ? snap.ocCostPerM : null);
-      const author = (aa && (aa.creator || aa.creatorSlug) && labFor(slug, aa.name, null, aa.creatorSlug, aa.creator))
-        || labFor(slug, aa.shortName || (md && md.name) || (snap && snap.label), null, null, null)
-        || (md && md.author && md.author !== 'AI Lab' ? md.author : null)
-        || (snap && snap.author)
-        || 'AI Lab';
+      const author = (aa && aa.creator) || (snap && snap.author) || null;
       const label = aa.shortName || (md && md.name) || (snap && snap.label) || slug;
       const contextWindowTokens = (md && md.limit && md.limit.context) || (snap && snap.contextWindowTokens) || null;
       const reasoning = md ? md.reasoning : (snap ? !!snap.reasoning : false);
@@ -419,7 +320,7 @@ window.LiveData = (function () {
         openWeights,
         plot,
         excludeReason,
-        hue: hueFor(author, snapById, slug),
+        hue: (aa && aa.creatorColor) || hueFor(author, snapById, slug),
       });
     }
 
@@ -433,11 +334,7 @@ window.LiveData = (function () {
         const aa = (aaPages && aaPages[id]) || aaMap.get(lookupKey) || aaMap.get(id) || (snap ? snap.aa : null);
 
         const cost = md && md.cost ? md.cost.output : (snap && snap.ocCostPerM != null ? snap.ocCostPerM : null);
-        const author = (aa && (aa.creator || aa.creatorSlug) && labFor(id, (aa && aa.name) || (md && md.name), null, aa && aa.creatorSlug, aa && aa.creator))
-          || labFor(id, (aa && aa.shortName) || (md && md.name) || (snap && snap.label), null, null, null)
-          || (md && md.author && md.author !== 'AI Lab' ? md.author : null)
-          || (snap && snap.author)
-          || 'AI Lab';
+        const author = (aa && aa.creator) || (snap && snap.author) || null;
         const label = (aa && aa.shortName) || (md && md.name) || (snap && snap.label) || id;
         const score = aa && typeof aa.intelligenceIndex === 'number' ? aa.intelligenceIndex : null;
         const plot = typeof cost === 'number' && cost > 0 && typeof score === 'number' && score > 0;
@@ -463,7 +360,7 @@ window.LiveData = (function () {
           openWeights: md && md.openWeights != null ? md.openWeights : (aa ? !!aa.isOpenWeights : (snap ? !!snap.openWeights : false)),
           plot,
           excludeReason,
-          hue: hueFor(author, snapById, id),
+          hue: (aa && aa.creatorColor) || hueFor(author, snapById, id),
         });
       }
     }

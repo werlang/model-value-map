@@ -424,8 +424,9 @@
     labOrder = [];
     byLab = new Map();
     for (const m of MODELS) {
-      if (!byLab.has(m.author)) { byLab.set(m.author, []); labOrder.push(m.author); }
-      byLab.get(m.author).push(m);
+      const lab = m.author || 'Other';
+      if (!byLab.has(lab)) { byLab.set(lab, []); labOrder.push(lab); }
+      byLab.get(lab).push(m);
     }
 
     // Sort models within each lab
@@ -490,7 +491,7 @@
     regroup();
     togglesEl.innerHTML = labOrder.map((lab) => {
       const list = byLab.get(lab);
-      const hue = list[0].hue;
+      const hue = (list[0] && list[0].hue) || '#3B5BDB';
       return `<section class="lab-group" data-lab="${esc(lab)}">
         <button type="button" class="lab-row" data-lab-toggle="${esc(lab)}"
                 aria-pressed="false">
@@ -501,7 +502,7 @@
         </button>
         <div class="chips" role="group" aria-label="${esc(lab)} models">
           ${list.map((m) => `<button type="button" class="chip" data-chip="${esc(m.id)}" aria-pressed="true">
-            <span class="chip-dot" style="--chip-c:${m.hue}"></span>
+            <span class="chip-dot" style="--chip-c:${m.hue || '#3B5BDB'}"></span>
             <span class="chip-name">${esc(m.label)}</span>
             <span class="chip-rank">${chipBadge(m)}</span>
           </button>`).join('')}

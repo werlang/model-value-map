@@ -50,7 +50,7 @@ test('first-party provider rate is prioritized over third-party duplicates', asy
   assert.equal(kimi.author, 'Moonshot AI');
 });
 
-test('GLM models are inferred to Zhipu AI and proxy aggregators like NanoGPT are ignored', async () => {
+test('model creator is extracted directly from AA API and compute providers like NanoGPT are ignored', async () => {
   const { res } = await run({
     modelsDev: {
       'nano-gpt': {
@@ -63,13 +63,13 @@ test('GLM models are inferred to Zhipu AI and proxy aggregators like NanoGPT are
     },
     coverage: {
       aaRecords: [
-        aaModel({ slug: 'glm-4-air-0111', shortName: 'GLM 4 Air', intelligenceIndex: 55 }),
-        aaModel({ slug: 'doubao-seed-2-0', shortName: 'Doubao Seed 2.0', intelligenceIndex: 52 }),
+        aaModel({ slug: 'glm-4-air-0111', shortName: 'GLM 4 Air', creator: { name: 'Z AI' }, intelligenceIndex: 55 }),
+        aaModel({ slug: 'doubao-seed-2-0', shortName: 'Doubao Seed 2.0', creator: { name: 'ByteDance' }, intelligenceIndex: 52 }),
       ],
     },
   });
   const glm = byId(res.models, 'glm-4-air-0111');
-  assert.equal(glm.author, 'Zhipu AI');
+  assert.equal(glm.author, 'Z AI');
   const doubao = byId(res.models, 'doubao-seed-2-0');
   assert.equal(doubao.author, 'ByteDance');
 });
