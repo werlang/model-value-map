@@ -94,6 +94,7 @@
 
   // ---------- DOM handles ----------
   const holder = document.getElementById('chart-holder');
+  const chartLoadingEl = document.getElementById('chart-loading');
   const readoutEl = document.getElementById('readout');
   const togglesEl = document.getElementById('toggles');
   const countEl = document.getElementById('visible-count');
@@ -251,6 +252,7 @@
     }
 
     holder.replaceChildren(svg);
+    if (chartLoadingEl) holder.appendChild(chartLoadingEl);
     renderReadout(activeId ? MODELS.find((mm) => mm.id === activeId) : null, frontier);
     renderCount(visible.length, frontier.length);
     syncChips();
@@ -475,6 +477,12 @@
     stampText.textContent = text;
   }
 
+  function setChartLoading(loading) {
+    if (chartLoadingEl) {
+      chartLoadingEl.classList.toggle('is-visible', Boolean(loading));
+    }
+  }
+
   function fmtClock(iso) {
     try { return new Date(iso).toISOString().slice(11, 16) + ' UTC'; } catch (_) { return ''; }
   }
@@ -488,12 +496,22 @@
   function updateStamp(res) {
     refreshBtn.classList.remove('spinning');
     refreshBtn.disabled = false;
-    if (!res) { setStamp('error', 'Snapshot Aug 23, 2026 · live fetch failed'); return; }
+    if (!res) {
+      setChartLoading(false);
+      setStamp('error', 'Snapshot Aug 23, 2026 · live fetch failed');
+      return;
+    }
     if (res.state === 'loading') {
+      setChartLoading(true);
       refreshBtn.classList.add('spinning');
       refreshBtn.disabled = true;
       setStamp(null, 'Fetching live data…');
       return;
+    }
+    if (res.state === 'stale' && res.refreshing) {
+      setChartLoading(true);
+    } else {
+      setChartLoading(false);
     }
     if (res.state === 'live') setStamp('live', 'Live · OpenCode updated ' + fmtClock(res.ocUpdatedAt));
     else if (res.state === 'cached') setStamp('live', 'Live · fetched ' + Math.max(1, Math.round((Date.now() - res.fetchedAt) / 60000)) + ' min ago');

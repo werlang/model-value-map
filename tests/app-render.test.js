@@ -333,7 +333,7 @@ test('the ⟳ button recovers a failed boot into a live one (force refresh)', as
   assert.equal(dotsOf(env).length, 2);
 });
 
-test('an in-flight fetch shows the loading state with a disabled ⟳', async () => {
+test('an in-flight fetch shows the loading state with a disabled ⟳ and visible chart spinner', async () => {
   const env = page({
     loadApp: true,
     models: tinySnapshot(),
@@ -344,4 +344,19 @@ test('an in-flight fetch shows the loading state with a disabled ⟳', async () 
   const btn = env.sb.el('stamp-refresh');
   assert.ok(btn.classList.contains('spinning'));
   assert.equal(btn.disabled, true);
+  const chartLoading = env.sb.el('chart-loading');
+  assert.ok(chartLoading.classList.contains('is-visible'), 'chart loading spinner is visible during fetch');
+});
+
+test('chart loading spinner hides when live fetch succeeds', async () => {
+  const env = await happyPage();
+  await env.sb.settle();
+  const chartLoading = env.sb.el('chart-loading');
+  assert.ok(!chartLoading.classList.contains('is-visible'), 'chart loading spinner is hidden after successful fetch');
+});
+
+test('chart loading spinner hides when live fetch fails', async () => {
+  const env = await bootOffline();
+  const chartLoading = env.sb.el('chart-loading');
+  assert.ok(!chartLoading.classList.contains('is-visible'), 'chart loading spinner is hidden after failed fetch');
 });

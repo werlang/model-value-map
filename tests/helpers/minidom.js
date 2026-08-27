@@ -202,7 +202,15 @@ export const PAGE_SKELETON = `
     <button type="button" class="action" data-action="none">None</button>
     <button type="button" class="action" data-action="frontier">Frontier only</button>
   </div>
-  <div class="chart-holder" id="chart-holder"></div>
+  <div class="chart-holder" id="chart-holder">
+    <div class="chart-loading" id="chart-loading" aria-hidden="true">
+      <svg class="chart-spinner" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+        <circle class="chart-spinner-track" cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" opacity="0.25" />
+        <path class="chart-spinner-head" d="M14 8a6 6 0 0 0-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <span class="chart-loading-text">Fetching live data…</span>
+    </div>
+  </div>
   <div id="readout"></div>
   <ul class="excluded-list" id="excluded-list"></ul>
   <section class="toggles-panel">
