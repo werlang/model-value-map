@@ -13,20 +13,27 @@
  */
 export function makeFetch(rules = []) {
   const calls = [];
-  const matches = (rule, url) =>
-    typeof rule.test === 'string' ? url.includes(rule.test)
+  const matches = (rule, url, opts) => {
+    if (rule.method && opts && opts.method && rule.method.toUpperCase() !== opts.method.toUpperCase()) return false;
+    return typeof rule.test === 'string' ? url.includes(rule.test)
       : rule.test instanceof RegExp ? rule.test.test(url)
-      : typeof rule.test === 'function' ? rule.test(url)
+      : typeof rule.test === 'function' ? rule.test(url, opts)
       : false;
-  const impl = async (url) => {
+  };
+  const impl = async (url, opts = {}) => {
     calls.push(url);
-    const rule = rules.find((r) => matches(r, url));
+    const rule = rules.find((r) => matches(r, url, opts));
     if (!rule || rule.fail) throw new TypeError('Failed to fetch');
-    if (rule.oncall) rule.oncall(url);
+    if (rule.oncall) rule.oncall(url, opts);
     if (rule.hang) return new Promise(() => {}); // never settles — loading states
     const status = rule.status ?? 200;
-    const body = typeof rule.body === 'function' ? rule.body() : (rule.body ?? '');
-    return { ok: status >= 200 && status < 300, status, text: async () => body };
+    const body = typeof rule.body === 'function' ? rule.body(opts) : (rule.body ?? '');
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      text: async () => body,
+      json: async () => JSON.parse(body || '{}'),
+    };
   };
   impl.calls = calls;
   impl.rules = rules;

@@ -44,6 +44,13 @@ window.LiveData = (function () {
   const CACHE_KEY = 'mvm.live.v1';
   const CACHE_LASTGOOD = 'mvm.live.lastgood';
   const TTL_MS = 30 * 60 * 1000;
+  const DEFAULT_API_URL = 'https://model-value-map-api.werlang.workers.dev';
+
+  function getApiUrl(opts) {
+    if (opts && opts.apiUrl !== undefined) return opts.apiUrl;
+    if (typeof window !== 'undefined' && window.MVM_API_URL !== undefined) return window.MVM_API_URL;
+    return DEFAULT_API_URL;
+  }
 
   // OpenCode model id → Artificial Analysis slug (variant chosen per README methodology)
   const AA_SLUG = {
@@ -74,10 +81,11 @@ window.LiveData = (function () {
   const FALLBACK_HUES = ['#3B5BDB', '#D9480F', '#0CA678', '#9C36B5', '#0C8599', '#C2255C', '#6741D9', '#E8890C', '#2F9E44'];
   let hueCursor = 0;
   function hueFor(author, snapById, id) {
-    const snap = snapById.get(id);
+    const snap = snapById && typeof snapById.get === 'function' ? snapById.get(id) : null;
     if (snap && snap.hue) return snap.hue;
     let h = 0;
-    for (let i = 0; i < author.length; i++) h = (h * 31 + author.charCodeAt(i)) >>> 0;
+    const str = author || '';
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
     return FALLBACK_HUES[h % FALLBACK_HUES.length] || FALLBACK_HUES[(hueCursor++) % FALLBACK_HUES.length];
   }
 
@@ -422,14 +430,58 @@ window.LiveData = (function () {
   function readLastGood() {
     return parseCacheEntry(readStore(CACHE_LASTGOOD));
   }
-  function entryFor(live) {
-    return JSON.stringify({ t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
+  function entryFor(live, t) {
+    return JSON.stringify({
+      t: t || Date.now(),
+      live: { ...live, aaIndex: Array.isArray(live.aaIndex) ? live.aaIndex : [...live.aaIndex] },
+    });
   }
-  function writeCache(live) {
-    try { localStorage.setItem(CACHE_KEY, entryFor(live)); } catch (_) { /* storage full / private mode */ }
+  function writeCache(live, t) {
+    try { localStorage.setItem(CACHE_KEY, entryFor(live, t)); } catch (_) { /* storage full / private mode */ }
   }
-  function writeLastGood(live) {
-    try { localStorage.setItem(CACHE_LASTGOOD, entryFor(live)); } catch (_) { /* ditto */ }
+  function writeLastGood(live, t) {
+    try { localStorage.setItem(CACHE_LASTGOOD, entryFor(live, t)); } catch (_) { /* ditto */ }
+  }
+
+  // ---------- worker API layer ----------
+  function validateApiPayload(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.t !== 'number' || !Number.isFinite(data.t) || data.t <= 0) return false;
+    if (!data.live || typeof data.live !== 'object') return false;
+    if (!Array.isArray(data.live.leaderboard) || data.live.leaderboard.length === 0) return false;
+    if (!Array.isArray(data.live.aaIndex)) return false;
+    return true;
+  }
+
+  async function fetchFromApi(apiUrl) {
+    if (!apiUrl) return null;
+    try {
+      const res = await fetch(apiUrl, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return validateApiPayload(data) ? data : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function postToApi(apiUrl, payload) {
+    if (!apiUrl) return;
+    try {
+      await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+      });
+    } catch (_) {
+      // Non-blocking: API update failure does not impact client UI
+    }
   }
 
   // ---------- orchestration ----------
@@ -455,7 +507,13 @@ window.LiveData = (function () {
   // The full network path: both indexes, parse, per-model fan-out, merge,
   // cache write. Returns the fresh result, a stale render on total outage, or
   // null when nothing usable was ever fetched.
-  async function fetchFresh(snapById) {
+  function staleResultFor(entry, snapById) {
+    const live = { ...entry.live, aaIndex: new Map(entry.live.aaIndex) };
+    const merged = merge(snapById, live);
+    return { state: 'stale', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: entry.t, ocUpdatedAt: live.updatedAt };
+  }
+
+  async function fetchFresh(apiUrl, snapById) {
     transportFailures = 0;
 
     // 1) the two index pages, in parallel
@@ -465,10 +523,10 @@ window.LiveData = (function () {
     ]);
     if (!ocHtml) {
       // OpenCode is unreachable through every transport — render the newest
-      // clean fetch we have ever seen rather than the ancient snapshot.
+      // clean fetch we have ever seen.
       const lastGood = readLastGood();
-      if (lastGood) return staleResultFor(snapById, lastGood);
-      return null; // nothing ever fetched cleanly — stay on snapshot
+      if (lastGood) return staleResultFor(lastGood, snapById);
+      return null;
     }
 
     // Canonical per-model URLs, straight from the horse's mouth.
@@ -538,24 +596,31 @@ window.LiveData = (function () {
     // Fresh cache: only a zero-transport-failure fetch earns the 30-minute
     // fast path. Last-good: any successful OpenCode backbone fetch refreshes
     // the outage layer — stray optional-page misses must not starve it.
-    if (!transportFailures) writeCache(live);
+    if (!transportFailures) {
+      writeCache(live);
+      postToApi(apiUrl, { t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
+    }
     writeLastGood(live);
 
     const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
     return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: Date.now(), ocUpdatedAt: live.updatedAt };
   }
 
-  // Entry point. Fresh cache answers instantly; an EXPIRED cache (or bare
-  // last-known-good) is served immediately as 'stale' while fetchFresh runs
-  // behind the scenes — its outcome reaches the caller again through
-  // opts.onUpdate — so a past-TTL visit no longer stares at the snapshot for
-  // the whole reload. Only a truly cold first visit (or an explicit ⟳ force)
-  // awaits the wire before answering.
-  async function load(snapshotModels, opts) {
-    const force = !!(opts && opts.force);
-    const snapById = new Map(snapshotModels.map((m) => [m.id, m]));
-    const report = opts && typeof opts.onUpdate === 'function' ? opts.onUpdate : null;
+  // Entry point.
+  // 1. Fetch from LS (if fresh and not force, return cached result immediately).
+  // 2. If LS miss (or expired) -> hit the Cloudflare Worker API (and store in LS on hit).
+  // 3. If API miss (or force) -> perform client-side fetching (relays + AA direct).
+  // 4. When client-side fetching is done, make a POST to update the API.
+  async function load(snapshotOrOpts, maybeOpts) {
+    const hasSnapshot = Array.isArray(snapshotOrOpts);
+    const snapshotModels = hasSnapshot ? snapshotOrOpts : [];
+    const opts = hasSnapshot ? (maybeOpts || {}) : (snapshotOrOpts || {});
+    const force = !!opts.force;
+    const snapById = snapshotModels.length > 0 ? new Map(snapshotModels.map((m) => [m.id, m])) : null;
+    const report = typeof opts.onUpdate === 'function' ? opts.onUpdate : null;
+    const apiUrl = getApiUrl(opts);
 
+    // 1. Fetch from LS
     if (!force) {
       const cached = readCache();
       if (cached && cached.live && Date.now() - cached.t < TTL_MS) {
@@ -563,25 +628,55 @@ window.LiveData = (function () {
         const merged = merge(snapById, live);
         return { state: 'cached', models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: cached.t, ocUpdatedAt: live.updatedAt };
       }
-      // Past TTL the newest clean payload still beats the ancient snapshot:
-      // paint it now, refresh in the background. While that refresh is in
-      // flight the stamp says "refreshing…"; if it ends in total outage the
-      // flag flips off so the stamp says "sources unreachable" instead.
+
+      // Past TTL: paint aged payload immediately as stale, refresh in background
       const bg = cached && cached.live ? cached : readLastGood();
       if (bg) {
-        const staleResult = { ...staleResultFor(snapById, bg), refreshing: true };
-        fetchFresh(snapById).then((fresh) => {
+        const staleResult = { ...staleResultFor(bg, snapById), refreshing: true };
+        const doRefresh = async () => {
+          if (apiUrl) {
+            const apiPayload = await fetchFromApi(apiUrl);
+            if (apiPayload && (Date.now() - apiPayload.t < TTL_MS)) {
+              writeCache(apiPayload.live, apiPayload.t);
+              writeLastGood(apiPayload.live, apiPayload.t);
+              const live = { ...apiPayload.live, aaIndex: new Map(apiPayload.live.aaIndex) };
+              const merged = merge(snapById, live);
+              const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
+              return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: apiPayload.t, ocUpdatedAt: live.updatedAt };
+            }
+          }
+          return fetchFresh(apiUrl, snapById);
+        };
+
+        doRefresh().then((fresh) => {
           if (report) report(fresh || { ...staleResult, refreshing: false });
         }).catch(() => { if (report) report({ ...staleResult, refreshing: false }); });
         return staleResult;
       }
     }
 
-    return fetchFresh(snapById);
+    // 2. If LS miss -> hit the API
+    if (!force && apiUrl) {
+      const apiPayload = await fetchFromApi(apiUrl);
+      if (apiPayload) {
+        writeCache(apiPayload.live, apiPayload.t);
+        writeLastGood(apiPayload.live, apiPayload.t);
+        const live = { ...apiPayload.live, aaIndex: new Map(apiPayload.live.aaIndex) };
+        const merged = merge(snapById, live);
+        const state = merged.snapFallbacks === 0 ? 'live' : 'partial';
+        return { state, models: merged.models, snapFallbacks: merged.snapFallbacks, fetchedAt: apiPayload.t, ocUpdatedAt: live.updatedAt };
+      }
+    }
+
+    // 3. If API miss (or force) -> perform current fetching
+    return fetchFresh(apiUrl, snapById);
   }
 
-  // ---------- merge live + snapshot ----------
-  function merge(snapById, live) {
+  // ---------- merge live (+ optional snapshot) ----------
+  function merge(snapOrLive, maybeLive) {
+    const live = maybeLive || snapOrLive;
+    const snapById = (maybeLive && snapOrLive instanceof Map) ? snapOrLive
+      : (maybeLive && Array.isArray(snapOrLive) ? new Map(snapOrLive.map((m) => [m.id, m])) : null);
     // Re-validate even cached payloads at this boundary: localStorage content
     // may predate a validation fix or be tampered with by other origins' bugs.
     const board = new Map((live.tokenCost || []).filter(validBoardRow).map((r) => [r.model, r]));
@@ -589,8 +684,8 @@ window.LiveData = (function () {
 
     const models = (live.leaderboard || []).map((row) => {
       const id = row.model;
-      const snap = snapById.get(id) || {};
-      const page = live.ocPages[id] || null;
+      const snap = snapById ? snapById.get(id) || {} : {};
+      const page = (live.ocPages && live.ocPages[id]) || null;
       const tc = board.get(id) || null;
 
       let ocCostPerM = null;
@@ -608,9 +703,9 @@ window.LiveData = (function () {
       }
 
       const sane = (rec) => (!!rec && num(rec.intelligenceIndex) && rec.intelligenceIndex >= 0 ? rec : null);
-      const aaLive = sane((AA_SLUG[id] && live.aaIndex.get(AA_SLUG[id])) || null)
-        || sane(live.aaIndex.get(normSlug(id)))
-        || sane(live.aaPages[id]);
+      const aaLive = sane((AA_SLUG[id] && live.aaIndex && live.aaIndex.get(AA_SLUG[id])) || null)
+        || sane(live.aaIndex && live.aaIndex.get(normSlug(id)))
+        || sane(live.aaPages && live.aaPages[id]);
       let aa = null;
       if (aaLive) {
         const slugUsed = aaLive.slug || AA_SLUG[id] || normSlug(id);
@@ -652,14 +747,13 @@ window.LiveData = (function () {
       };
     });
 
-    // A model OpenCode dropped from its leaderboard must not silently vanish:
-    // re-append its snapshot record so it stays visible (the UI's "Off the
-    // map" tray and toggles keep working off the same shape).
-    const seen = new Set(models.map((m) => m.id));
-    for (const snap of snapById.values()) {
-      if (seen.has(snap.id)) continue;
-      models.push({ ...snap });
-      snapFallbacks++;
+    if (snapById) {
+      const seen = new Set(models.map((m) => m.id));
+      for (const snap of snapById.values()) {
+        if (seen.has(snap.id)) continue;
+        models.push({ ...snap });
+        snapFallbacks++;
+      }
     }
 
     return { models, snapFallbacks };
