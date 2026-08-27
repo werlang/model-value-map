@@ -50,6 +50,30 @@ test('first-party provider rate is prioritized over third-party duplicates', asy
   assert.equal(kimi.author, 'Moonshot AI');
 });
 
+test('GLM models are inferred to Zhipu AI and proxy aggregators like NanoGPT are ignored', async () => {
+  const { res } = await run({
+    modelsDev: {
+      'nano-gpt': {
+        name: 'NanoGPT',
+        models: {
+          'glm-4-air-0111': { name: 'GLM 4 Air', cost: { input: 1, output: 2 } },
+          'doubao-seed-2-0': { name: 'Doubao Seed 2.0', cost: { input: 1, output: 2 } },
+        },
+      },
+    },
+    coverage: {
+      aaRecords: [
+        aaModel({ slug: 'glm-4-air-0111', shortName: 'GLM 4 Air', intelligenceIndex: 55 }),
+        aaModel({ slug: 'doubao-seed-2-0', shortName: 'Doubao Seed 2.0', intelligenceIndex: 52 }),
+      ],
+    },
+  });
+  const glm = byId(res.models, 'glm-4-air-0111');
+  assert.equal(glm.author, 'Zhipu AI');
+  const doubao = byId(res.models, 'doubao-seed-2-0');
+  assert.equal(doubao.author, 'ByteDance');
+});
+
 // ---------- AA matching tiers ----------
 
 test('curated slug matches the exact AA flight entry', async () => {

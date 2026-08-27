@@ -77,48 +77,97 @@ window.LiveData = (function () {
     return -1;
   }
 
+  const AGGREGATOR_KEYS = [
+    'nanogpt', 'nano-gpt', 'openrouter', 'deepinfra', 'groq', 'together', 'togetherai',
+    'fireworks', 'fireworks-ai', 'novita', 'hyperbolic', 'replicate', 'anyscale',
+    'scaleway', 'parasail', 'klusterai', 'router', '302ai', 'requesty', 'mixlayer',
+    'neuralwatt', 'edenai', 'nebius', 'chutes', 'cerebras', 'sambanova', 'glhf',
+    'huggingface', 'featherless', 'friendliai', 'lepton', 'siliconflow', 'plan', 'coding'
+  ];
+
   function labFor(id, name, family, providerKey, providerName) {
     const modelStr = `${id || ''} ${name || ''} ${family || ''}`.toLowerCase();
-    if (/\b(deepseek|deepseek-ai)\b/i.test(modelStr) || modelStr.includes('deepseek')) return 'DeepSeek';
+
+    // 1. Explicit model name / family / id match (highest precedence)
+    if (/\b(glm|chatglm|codegeex|cogvideo|zhipu)\b/i.test(modelStr) || modelStr.startsWith('glm-') || modelStr.includes('glm-') || modelStr.includes('zhipu')) return 'Zhipu AI';
+    if (/\b(deepseek|deepseek-ai|deepseek-v|deepseek-r|deepseek-coder)\b/i.test(modelStr) || modelStr.includes('deepseek')) return 'DeepSeek';
     if (/\b(claude|anthropic)\b/i.test(modelStr) || modelStr.includes('claude')) return 'Anthropic';
-    if (/\b(gpt|o1|o3|o4|chatgpt|openai)\b/i.test(modelStr) || modelStr.startsWith('gpt-') || modelStr.startsWith('openai/')) return 'OpenAI';
-    if (/\b(gemini|gemma|google)\b/i.test(modelStr) || modelStr.includes('gemini') || modelStr.includes('gemma')) return 'Google';
+    if (/\b(gpt|o1|o3|o4|chatgpt|openai|dall-e|sora|whisper|text-embedding)\b/i.test(modelStr) || modelStr.startsWith('gpt-') || modelStr.startsWith('openai/')) return 'OpenAI';
+    if (/\b(gemini|gemma|palm|google)\b/i.test(modelStr) || modelStr.includes('gemini') || modelStr.includes('gemma')) return 'Google';
     if (/\b(kimi|moonshot|moonshotai)\b/i.test(modelStr) || modelStr.includes('kimi') || modelStr.includes('moonshot')) return 'Moonshot AI';
-    if (/\b(glm|zhipu|zhipuai|zai-org|z-ai)\b/i.test(modelStr) || modelStr.includes('glm') || modelStr.includes('zhipu')) return 'Zhipu AI';
-    if (/\b(qwen|alibaba|tongyi)\b/i.test(modelStr) || modelStr.includes('qwen')) return 'Alibaba';
+    if (/\b(qwen|alibaba|tongyi|wanx)\b/i.test(modelStr) || modelStr.includes('qwen')) return 'Alibaba';
     if (/\b(mimo|xiaomi)\b/i.test(modelStr) || modelStr.includes('mimo') || modelStr.includes('xiaomi')) return 'Xiaomi';
-    if (/\b(minimax|minimaxai)\b/i.test(modelStr) || modelStr.includes('minimax')) return 'MiniMax';
+    if (/\b(minimax|abab|minimaxai)\b/i.test(modelStr) || modelStr.includes('minimax')) return 'MiniMax';
     if (/\b(grok|xai)\b/i.test(modelStr) || modelStr.includes('grok')) return 'xAI';
-    if (/\b(nemotron|nvidia)\b/i.test(modelStr) || modelStr.includes('nemotron')) return 'Nvidia';
-    if (/\b(mistral|ministral|codestral|devstral|pixtral)\b/i.test(modelStr)) return 'Mistral';
+    if (/\b(nemotron|nvidia|cosmos)\b/i.test(modelStr) || modelStr.includes('nemotron')) return 'Nvidia';
+    if (/\b(mistral|mixtral|codestral|ministral|pixtral|devstral)\b/i.test(modelStr) || modelStr.includes('mistral')) return 'Mistral';
     if (/\b(llama|meta|muse)\b/i.test(modelStr) || modelStr.includes('llama') || modelStr.includes('muse')) return 'Meta';
     if (/\b(hunyuan|tencent|hy3)\b/i.test(modelStr) || modelStr.includes('hunyuan')) return 'Tencent';
-    if (/\b(cohere|command-r|aya)\b/i.test(modelStr)) return 'Cohere';
+    if (/\b(cohere|command-r|command-a|command-plus|aya)\b/i.test(modelStr) || modelStr.includes('command-')) return 'Cohere';
     if (/\b(stepfun|step-)\b/i.test(modelStr)) return 'StepFun';
     if (/\b(solar|upstage)\b/i.test(modelStr)) return 'Upstage';
+    if (/\b(jamba|ai21)\b/i.test(modelStr)) return 'AI21 Labs';
+    if (/\b(doubao|bytedance|skylark)\b/i.test(modelStr) || modelStr.includes('doubao')) return 'ByteDance';
+    if (/\b(ernie|baidu)\b/i.test(modelStr) || modelStr.includes('ernie')) return 'Baidu';
+    if (/\b(amazon|nova|titan|bedrock)\b/i.test(modelStr) || modelStr.startsWith('nova-')) return 'Amazon';
+    if (/\b(phi|phi-3|phi-4|wizardlm|microsoft)\b/i.test(modelStr)) return 'Microsoft';
+    if (/\b(dbrx|databricks)\b/i.test(modelStr)) return 'Databricks';
+    if (/\b(internlm|shanghai)\b/i.test(modelStr)) return 'Shanghai AI Lab';
+    if (/\b(yi-|yi_01|01-ai|01.ai)\b/i.test(modelStr)) return '01.AI';
     if (/\b(perplexity|sonar)\b/i.test(modelStr)) return 'Perplexity';
-    if (/\b(amazon|nova|titan|bedrock)\b/i.test(modelStr)) return 'Amazon';
-    if (/\b(baidu|ernie)\b/i.test(modelStr)) return 'Baidu';
 
+    // Check organization prefix in "org/model"
+    if (id && id.includes('/')) {
+      const org = id.split('/')[0].toLowerCase();
+      if (org === 'meta-llama' || org === 'meta') return 'Meta';
+      if (org === 'google') return 'Google';
+      if (org === 'anthropic') return 'Anthropic';
+      if (org === 'openai') return 'OpenAI';
+      if (org === 'deepseek-ai' || org === 'deepseek') return 'DeepSeek';
+      if (org === 'zhipuai' || org === 'zai-org' || org === 'thudm' || org === 'zhipu') return 'Zhipu AI';
+      if (org === 'qwen' || org === 'alibaba') return 'Alibaba';
+      if (org === 'mistralai' || org === 'mistral') return 'Mistral';
+      if (org === 'nvidia') return 'Nvidia';
+      if (org === 'cohere') return 'Cohere';
+      if (org === 'moonshotai' || org === 'moonshot') return 'Moonshot AI';
+      if (org === 'minimax') return 'MiniMax';
+      if (org === 'bytedance') return 'ByteDance';
+      if (org === 'microsoft') return 'Microsoft';
+    }
+
+    // 2. First-party provider matches (skip aggregators/routers)
     const provStr = `${providerKey || ''} ${providerName || ''}`.toLowerCase();
-    if (provStr.includes('openai')) return 'OpenAI';
-    if (provStr.includes('anthropic')) return 'Anthropic';
-    if (provStr.includes('google')) return 'Google';
-    if (provStr.includes('deepseek')) return 'DeepSeek';
-    if (provStr.includes('moonshot')) return 'Moonshot AI';
-    if (provStr.includes('zhipu')) return 'Zhipu AI';
-    if (provStr.includes('alibaba')) return 'Alibaba';
-    if (provStr.includes('xiaomi')) return 'Xiaomi';
-    if (provStr.includes('minimax')) return 'MiniMax';
-    if (provStr.includes('xai')) return 'xAI';
-    if (provStr.includes('nvidia')) return 'Nvidia';
-    if (provStr.includes('mistral')) return 'Mistral';
-    if (provStr.includes('meta')) return 'Meta';
-    if (provStr.includes('tencent')) return 'Tencent';
-    if (provStr.includes('cohere')) return 'Cohere';
-    if (provStr.includes('upstage')) return 'Upstage';
+    const isAggregator = AGGREGATOR_KEYS.some((k) => provStr.includes(k));
 
-    return providerName || providerKey || 'AI Lab';
+    if (!isAggregator) {
+      if (provStr.includes('openai')) return 'OpenAI';
+      if (provStr.includes('anthropic')) return 'Anthropic';
+      if (provStr.includes('google')) return 'Google';
+      if (provStr.includes('deepseek')) return 'DeepSeek';
+      if (provStr.includes('moonshot')) return 'Moonshot AI';
+      if (provStr.includes('zhipu') || provStr.includes('zai')) return 'Zhipu AI';
+      if (provStr.includes('alibaba') || provStr.includes('qwen')) return 'Alibaba';
+      if (provStr.includes('xiaomi') || provStr.includes('mimo')) return 'Xiaomi';
+      if (provStr.includes('minimax')) return 'MiniMax';
+      if (provStr.includes('xai')) return 'xAI';
+      if (provStr.includes('nvidia')) return 'Nvidia';
+      if (provStr.includes('mistral')) return 'Mistral';
+      if (provStr.includes('meta')) return 'Meta';
+      if (provStr.includes('tencent')) return 'Tencent';
+      if (provStr.includes('cohere')) return 'Cohere';
+      if (provStr.includes('stepfun')) return 'StepFun';
+      if (provStr.includes('upstage')) return 'Upstage';
+      if (provStr.includes('ai21')) return 'AI21 Labs';
+      if (provStr.includes('bytedance')) return 'ByteDance';
+      if (provStr.includes('baidu')) return 'Baidu';
+      if (provStr.includes('microsoft')) return 'Microsoft';
+      if (provStr.includes('amazon')) return 'Amazon';
+      if (providerName && providerName !== 'Default' && !providerName.toLowerCase().includes('plan')) {
+        return providerName;
+      }
+    }
+
+    return 'AI Lab';
   }
 
   function scanAaModels(flight) {

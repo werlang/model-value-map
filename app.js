@@ -245,6 +245,7 @@
       mark.setAttribute('fill', m.hue || '#3B5BDB');
       mark.classList.add('dot-enter');
       mark.style.animationDelay = `${80 + rankNum * 28}ms`;
+      mark.addEventListener('animationend', () => mark.classList.remove('dot-enter'), { once: true });
 
       const ring = el('circle', 'dot-ring');
       ring.setAttribute('r', (r + 4.5).toFixed(1));
@@ -276,6 +277,9 @@
 
     if (on && id) {
       if (g) {
+        if (g.parentElement && g.parentElement.lastElementChild !== g) {
+          g.parentElement.appendChild(g);
+        }
         g.classList.add('is-active');
         const ring = g.querySelector('.dot-ring');
         if (ring) ring.style.opacity = 1;
@@ -552,6 +556,25 @@
         saveHidden(); render();
       }
     });
+
+    togglesEl.addEventListener('pointerenter', (e) => {
+      const chipBtn = e.target.closest('[data-chip]');
+      if (chipBtn) {
+        const id = chipBtn.dataset.chip;
+        const dot = svg ? svg.querySelector(`[data-id="${id}"]`) : null;
+        if (dot) setActive(id, dot, true);
+      }
+    }, true);
+
+    togglesEl.addEventListener('pointerleave', (e) => {
+      const chipBtn = e.target.closest('[data-chip]');
+      if (chipBtn) {
+        const id = chipBtn.dataset.chip;
+        const dot = svg ? svg.querySelector(`[data-id="${id}"]`) : null;
+        if (dot) setActive(null, dot, false);
+      }
+    }, true);
+
     document.querySelector('.quick-actions').addEventListener('click', (e) => {
       const btn = e.target.closest('.action');
       if (!btn) return;

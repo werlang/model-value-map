@@ -539,7 +539,20 @@ body {
 
 /* ---------- excluded tray ---------- */
 
-.excluded-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.excluded-panel {
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.excluded-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0 4px 0 0;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
 
 .excluded-list li {
   padding: 7px 0;
