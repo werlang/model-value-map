@@ -52,14 +52,15 @@ A few things worth knowing:
 
 ## Files
 
-| File         | Purpose                                                 |
-| ------------ | ------------------------------------------------------- |
-| `index.html` | Semantic shell                                          |
-| `styles.css` | Design tokens + components (IBM Plex Mono/Sans)         |
-| `data.js`    | Embedded snapshot — the fallback layer (retrieved 2026-08-23) |
-| `live.js`    | Live fetch, relay chain, parsers, merge, cache          |
-| `app.js`     | Scales, Pareto computation, SVG rendering, toggles      |
-| `tests/`     | Headless behavioral suite — runs on Node's built-in test runner |
+| File               | Purpose                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `index.html`       | Semantic shell                                          |
+| `styles.css`       | Design tokens + components (IBM Plex Mono/Sans)         |
+| `live.js`          | Tiered fetch (LS → Worker API → fallback relays), parsers, merge, cache & API sync |
+| `app.js`           | Scales, Pareto computation, SVG rendering, toggles      |
+| `worker/index.js`  | Cloudflare Worker API: holds latest live data in KV     |
+| `wrangler.toml`    | Cloudflare Worker configuration and KV binding          |
+| `tests/`           | Headless behavioral suite — runs on Node's built-in test runner |
 
 ## Tests
 

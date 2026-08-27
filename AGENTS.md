@@ -26,14 +26,16 @@ These are design decisions, not accidents. Do not violate them without explicit 
 
 ## File map
 
-| File         | Responsibility |
-| ------------ | -------------- |
-| `index.html` | Semantic shell; loads scripts in order: data → live → app |
-| `styles.css` | Design tokens + components (IBM Plex Mono/Sans) |
-| `data.js`    | Snapshot joined from both sources; single source of fallback truth |
-| `live.js`    | Relay chain (direct → allorigins → codetabs → corsproxy), parsers, per-value merge, cache |
-| `app.js`     | Scales (log x, linear y), Pareto computation, SVG render, toggles, readout |
-| `tests/`     | Headless behavioral suite (`npm test`) — sandbox + stubs, no dependencies |
+| File               | Responsibility |
+| ------------------ | -------------- |
+| `index.html`       | Semantic shell; loads scripts in order: data → live → app |
+| `styles.css`       | Design tokens + components (IBM Plex Mono/Sans) |
+| `data.js`          | Snapshot joined from both sources; single source of fallback truth |
+| `live.js`          | Tiered fetch (LS → Worker API → relays/AA direct), parsers, per-value merge, cache & API sync |
+| `app.js`           | Scales (log x, linear y), Pareto computation, SVG render, toggles, readout |
+| `worker/index.js`  | Cloudflare Worker API: holds latest live data, validates POST schema, serves GET with CORS |
+| `wrangler.toml`    | Cloudflare Worker configuration and KV binding |
+| `tests/`           | Headless behavioral suite (`npm test`) — sandbox + stubs, no dependencies |
 
 When changing behavior, keep logic in the file that owns it (fetch/parse/merge → `live.js`; rendering/scales/UI → `app.js`).
 

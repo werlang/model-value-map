@@ -4,7 +4,7 @@
   "description": "Static dashboard: OpenCode token cost × Artificial Analysis Intelligence Index.",
   "type": "module",
   "scripts": {
-    "test": "node --test \"tests/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage \"tests/*.test.js\""
+    "test": "node --test tests/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/*.test.js"
   }
 }
