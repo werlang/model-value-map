@@ -472,15 +472,23 @@ window.LiveData = (function () {
   async function postToApi(apiUrl, payload) {
     if (!apiUrl) return;
     try {
-      await fetch(apiUrl, {
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         credentials: 'omit',
         referrerPolicy: 'no-referrer',
       });
-    } catch (_) {
-      // Non-blocking: API update failure does not impact client UI
+      if (!res.ok) {
+        try {
+          const err = await res.json();
+          console.warn('Worker API POST returned', res.status, err);
+        } catch (_) {
+          console.warn('Worker API POST returned', res.status);
+        }
+      }
+    } catch (err) {
+      console.warn('Worker API POST failed:', err);
     }
   }
 
@@ -594,8 +602,7 @@ window.LiveData = (function () {
     };
     const merged = merge(snapById, live);
     // Fresh cache: only a zero-transport-failure fetch earns the 30-minute
-    // fast path. Last-good: any successful OpenCode backbone fetch refreshes
-    // the outage layer — stray optional-page misses must not starve it.
+    // fast path and updates the Cloudflare Worker API.
     if (!transportFailures) {
       writeCache(live);
       postToApi(apiUrl, { t: Date.now(), live: { ...live, aaIndex: [...live.aaIndex] } });
