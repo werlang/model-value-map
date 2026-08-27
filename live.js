@@ -185,6 +185,8 @@ window.LiveData = (function () {
             slug: o.slug,
             shortName: o.shortName,
             name: o.name || o.shortName,
+            creator: (o.creator && (o.creator.name || o.creator.slug)) || null,
+            creatorSlug: (o.creator && o.creator.slug) || null,
             intelligenceIndex: Math.round(o.intelligenceIndex * 100) / 100,
             effort: (o.effort && o.effort.label) || null,
             isOpenWeights: !!o.isOpenWeights,
@@ -208,6 +210,8 @@ window.LiveData = (function () {
             slug: slug,
             shortName: shortName,
             name: rawLabel,
+            creator: null,
+            creatorSlug: null,
             intelligenceIndex: Math.round(score * 100) / 100,
             effort: effort,
             isOpenWeights: false,
@@ -383,7 +387,11 @@ window.LiveData = (function () {
       const snap = snapById ? snapById.get(slug) || snapById.get(lookupKey) : null;
 
       const cost = md && md.cost ? md.cost.output : (snap && snap.ocCostPerM != null ? snap.ocCostPerM : null);
-      const author = (md && md.author) || (snap && snap.author) || 'AI Lab';
+      const author = (aa && (aa.creator || aa.creatorSlug) && labFor(slug, aa.name, null, aa.creatorSlug, aa.creator))
+        || labFor(slug, aa.shortName || (md && md.name) || (snap && snap.label), null, null, null)
+        || (md && md.author && md.author !== 'AI Lab' ? md.author : null)
+        || (snap && snap.author)
+        || 'AI Lab';
       const label = aa.shortName || (md && md.name) || (snap && snap.label) || slug;
       const contextWindowTokens = (md && md.limit && md.limit.context) || (snap && snap.contextWindowTokens) || null;
       const reasoning = md ? md.reasoning : (snap ? !!snap.reasoning : false);
@@ -425,7 +433,11 @@ window.LiveData = (function () {
         const aa = (aaPages && aaPages[id]) || aaMap.get(lookupKey) || aaMap.get(id) || (snap ? snap.aa : null);
 
         const cost = md && md.cost ? md.cost.output : (snap && snap.ocCostPerM != null ? snap.ocCostPerM : null);
-        const author = (md && md.author) || (snap && snap.author) || 'AI Lab';
+        const author = (aa && (aa.creator || aa.creatorSlug) && labFor(id, (aa && aa.name) || (md && md.name), null, aa && aa.creatorSlug, aa && aa.creator))
+          || labFor(id, (aa && aa.shortName) || (md && md.name) || (snap && snap.label), null, null, null)
+          || (md && md.author && md.author !== 'AI Lab' ? md.author : null)
+          || (snap && snap.author)
+          || 'AI Lab';
         const label = (aa && aa.shortName) || (md && md.name) || (snap && snap.label) || id;
         const score = aa && typeof aa.intelligenceIndex === 'number' ? aa.intelligenceIndex : null;
         const plot = typeof cost === 'number' && cost > 0 && typeof score === 'number' && score > 0;
