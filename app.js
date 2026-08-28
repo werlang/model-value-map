@@ -259,10 +259,12 @@
 
       g.addEventListener('pointerenter', () => { setActive(m.id, g, true); });
       g.addEventListener('pointerleave', () => { setActive(null, g, false); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); setActive(m.id, g, true); });
       g.addEventListener('focus', () => { setActive(m.id, g, true); });
       g.addEventListener('blur', () => { setActive(null, g, false); });
     }
 
+    svg.addEventListener('click', () => { setActive(null, null, false); });
     holder.replaceChildren(svg);
     if (chartLoadingEl) holder.appendChild(chartLoadingEl);
     renderReadout(activeId ? MODELS.find((mm) => mm.id === activeId) : null, frontier);
