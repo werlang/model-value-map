@@ -11,7 +11,6 @@ export const AA_INDEX = 'https://artificialanalysis.ai/models';
 export const WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
 export const WORKER_URL_RE = /^https:\/\/model-value-map-api\.pswerlang\.workers\.dev\/$/;
 export const CURATED_GO = 'https://opencode.ai/docs/go';
-export const CURATED_ZEN = 'https://opencode.ai/docs/zen';
 export const WORKER_CURATED = 'https://model-value-map-api.pswerlang.workers.dev/curated';
 
 function curatedHtmlFor(snapshot) {
@@ -148,9 +147,8 @@ export function standardEnv(over = {}) {
 
   const rules = [];
   rules.push(workerRule);
-  // curated Go/Zen (app scrapes these at boot) + worker fallback
+  // curated Go docs (app scrapes at boot) + worker curated fallback
   const goHtml = over.curatedGoHtml ?? curatedHtmlFor(snapshot);
-  const zenHtml = over.curatedZenHtml ?? curatedHtmlFor(snapshot);
   const curatedIds = over.curatedIds ?? snapshot.map((m) => m.id);
   const workerCuratedRule = (() => {
     if (over.workerCuratedRule) return over.workerCuratedRule;
@@ -162,12 +160,7 @@ export function standardEnv(over = {}) {
     if (over.curatedGoFail) return { test: CURATED_GO, fail: true };
     return { test: CURATED_GO, body: goHtml };
   })();
-  const zenRule = (() => {
-    if (over.curatedZenRule) return over.curatedZenRule;
-    if (over.curatedZenFail) return { test: CURATED_ZEN, fail: true };
-    return { test: CURATED_ZEN, body: zenHtml };
-  })();
-  rules.push(goRule, zenRule, workerCuratedRule);
+  rules.push(goRule, workerCuratedRule);
   if (over.aaPageRules) rules.push(...over.aaPageRules);
   else if (over.aaPageRule) rules.push(over.aaPageRule);
   else rules.push({ test: /^https:\/\/artificialanalysis\.ai\/models\/.+/, status: 404 });

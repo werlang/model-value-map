@@ -118,6 +118,23 @@ test('buildModels keeps docs-curated OC-only models off-map with clean ids', () 
   assert.match(m.excludeReason, /Not scored/);
 });
 
+test('buildModels emits roster models with no OC pricing as off-map, not silently dropped', () => {
+  // LongCat-2.0 exists on the Go table; simulate models.dev lacking pricing for it
+  const mdMap = parseModelsDev({});
+  const aaMap = parseAaFree([]);
+  mergeAaScores(aaMap, extractAaIndexScores(
+    aaIndexHtml([aaModel({ slug: 'longcat-2-0', shortName: 'LongCat 2.0', intelligenceIndex: 33.97 })]),
+  ));
+  const curated = new Set(['LongCat-2.0', 'longcat-2-0', 'longcat-2.0']);
+  const models = buildModels(mdMap, aaMap, curated);
+  const m = models.find((x) => x.id === 'longcat-2.0' || x.id === 'longcat-2-0');
+  assert.ok(m, 'roster model without pricing still emitted');
+  assert.equal(m.plot, false);
+  assert.equal(m.ocCostPerM, null);
+  assert.equal(m.excludeReason, 'Missing pricing');
+  assert.equal(m.aa.intelligenceIndex, 33.97, 'AA score still surfaces in the tray');
+});
+
 // ---------- curated docs parsing ----------
 
 test('extractCuratedIdsFromHtml reads MODEL ID tables and skips limit rows', () => {

@@ -9,8 +9,9 @@
   let MODELS = (SNAPSHOT && SNAPSHOT.models) || [];
   const STORE_KEY = 'mvm.hidden.v1';
 
-  // ---------- curated filter (Go/Zen) ----------
-  const CURATED_URLS = ['https://opencode.ai/docs/go', 'https://opencode.ai/docs/zen'];
+  // ---------- curated filter (Go table) ----------
+  // The Go docs table is the roster: every model listed there must show.
+  const CURATED_URLS = ['https://opencode.ai/docs/go'];
   const WORKER_CURATED_URL = 'https://model-value-map-api.pswerlang.workers.dev/curated';
   let curatedSet = null;
 
@@ -168,32 +169,15 @@
   }
 
   async function loadCurated() {
-    const sets = [];
+    let curatedRaw = null;
     for (const url of CURATED_URLS) {
       try {
         const res = await fetch(url, { headers: { 'Accept': 'text/html' }, credentials: 'omit', referrerPolicy: 'no-referrer' });
         if (!res.ok) continue;
         const html = await res.text();
         const ids = extractCuratedIds(html);
-        if (ids.size) sets.push(ids);
+        if (ids.size) { curatedRaw = ids; break; }
       } catch (_) {}
-    }
-    let curatedRaw = null;
-    if (sets.length === 2) {
-      const norm = (s) => s.toLowerCase().replace(/[\s\/\._]+/g, '-').replace(/-free$/, '');
-      const setA = new Set([...sets[0]].map((s) => norm(s)));
-      const setB = new Set([...sets[1]].map((s) => norm(s)));
-      const inter = new Set([...setA].filter((x) => setB.has(x)));
-      if (inter.size) {
-        curatedRaw = new Set();
-        for (const raw of sets[0]) if (inter.has(norm(raw))) curatedRaw.add(raw);
-        for (const raw of sets[1]) if (inter.has(norm(raw))) curatedRaw.add(raw);
-        for (const n of inter) curatedRaw.add(n);
-      } else {
-        curatedRaw = new Set([...sets[0], ...sets[1]]);
-      }
-    } else if (sets.length === 1) {
-      curatedRaw = sets[0];
     }
     if (curatedRaw && curatedRaw.size) {
       applyCuratedIds(curatedRaw);

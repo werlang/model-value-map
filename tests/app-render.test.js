@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { standardEnv, MODELS_DEV, AA_INDEX, CURATED_GO, CURATED_ZEN, WORKER_CURATED } from './helpers/setup-live.js';
+import { standardEnv, MODELS_DEV, AA_INDEX, CURATED_GO, WORKER_CURATED } from './helpers/setup-live.js';
 import { makeStorage } from './helpers/storage.js';
 import { DEFAULT_CLOCK_START } from './helpers/sandbox.js';
 import {
@@ -387,7 +387,7 @@ test('chart loading spinner hides when live fetch fails', async () => {
   assert.ok(!chartLoading.classList.contains('is-visible'), 'chart loading spinner is hidden after failed fetch');
 });
 
-// ---------- curated Go/Zen filtering ----------
+// ---------- curated Go table filtering ----------
 
 /** Worker returns the full roster (curated + non-curated noise), like the real worker. */
 function noiseModel() {
@@ -406,10 +406,10 @@ function curatedPage(over = {}) {
   return standardEnv({ loadApp: true, snapshot: models, workerModels: full, ...over });
 }
 
-test('boot filters the full worker roster down to the curated Go/Zen set', async () => {
+test('boot filters the full worker roster down to the Go table set', async () => {
   const env = curatedPage();
   await env.sb.settle();
-  // noise model (claude-fable-5) is not on the Go/Zen docs → hidden everywhere
+  // noise model (claude-fable-5) is not on the Go docs → hidden everywhere
   assert.equal(dotOf(env, 'claude-fable-5'), undefined);
   assert.equal(env.sb.el('toggles').querySelector('[data-chip="claude-fable-5"]'), null);
   assert.equal(env.sb.el('toggles').querySelectorAll('[data-chip]').length, 6);
@@ -425,32 +425,33 @@ test('live refresh keeps the curated filter applied', async () => {
   assert.equal(dotOf(env, 'claude-fable-5'), undefined);
 });
 
-test('when curated docs and the worker curated endpoint all fail, nothing is filtered', async () => {
-  const env = curatedPage({ curatedGoFail: true, curatedZenFail: true, workerCuratedFail: true });
+test('when the Go docs and the worker curated endpoint all fail, nothing is filtered', async () => {
+  const env = curatedPage({ curatedGoFail: true, workerCuratedFail: true });
   await env.sb.settle();
   assert.equal(dotsOf(env).length, 5); // full roster including the noise model
 });
 
 test('worker curated endpoint covers a direct docs failure (CORS blocked)', async () => {
-  const env = curatedPage({ curatedGoFail: true, curatedZenFail: true });
+  const env = curatedPage({ curatedGoFail: true });
   await env.sb.settle();
   assert.equal(dotOf(env, 'claude-fable-5'), undefined);
   assert.equal(dotsOf(env).length, 4);
 });
 
-test('go/zen intersection: models listed on only one page stay off the map', async () => {
+test('every model on the Go table shows, even ones absent from Zen (e.g. glm-5.3)', async () => {
   const models = fullSnapshot();
-  const rows = models.map((m) => `<tr><td>${m.label}</td><td>${m.id}</td></tr>`).join('');
-  const goOnly = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}<tr><td>Go Only Model</td><td>go-only-model</td></tr></tbody></table>`;
-  const zenOnly = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}<tr><td>Zen Only Model</td><td>zen-only-model</td></tr></tbody></table>`;
-  const base = models[0];
-  const full = [...models,
-    { ...base, id: 'go-only-model', label: 'Go Only Model', aa: { ...base.aa, name: 'Go Only', intelligenceIndex: 40, url: 'https://x/go' } },
-    { ...base, id: 'zen-only-model', label: 'Zen Only Model', aa: { ...base.aa, name: 'Zen Only', intelligenceIndex: 41, url: 'https://x/zen' } },
-  ];
-  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedGoHtml: goOnly, curatedZenHtml: zenOnly });
+  const goHtml = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>` +
+    models.map((m) => `<tr><td>${m.label}</td><td>${m.id}</td></tr>`).join('') +
+    `<tr><td>GLM-5.3</td><td>glm-5.3</td></tr></tbody></table>`;
+  const glm53 = {
+    ...models[0], id: 'glm-5.3', label: 'GLM-5.3', author: 'Zhipu', hue: '#0CA678',
+    ocCostPerM: 4.4, ocCost: { input: 1.4, output: 4.4, cached: 0.26 },
+    aa: { name: 'GLM-5.3 (max)', intelligenceIndex: 59.51, effort: 'max', url: 'https://artificialanalysis.ai/models/glm-5-3' },
+  };
+  const full = [...models, glm53, noiseModel()];
+  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedGoHtml: goHtml });
   await env.sb.settle();
-  assert.equal(dotOf(env, 'go-only-model'), undefined);
-  assert.equal(dotOf(env, 'zen-only-model'), undefined);
-  assert.equal(dotsOf(env).length, 4);
+  assert.ok(dotOf(env, 'glm-5.3'), 'glm-5.3 is on the Go table → must be plotted');
+  assert.equal(dotOf(env, 'claude-fable-5'), undefined, 'off-table models stay hidden');
+  assert.equal(dotsOf(env).length, 5); // 4 snapshot plotted + glm-5.3
 });

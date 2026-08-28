@@ -20,7 +20,8 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-const CURATED_DOCS = ['https://opencode.ai/docs/go', 'https://opencode.ai/docs/zen'];
+// The Go docs table is the roster — every model listed there must appear on the page.
+const CURATED_DOCS = ['https://opencode.ai/docs/go'];
 
 function extractCuratedIdsFromHtml(html) {
   const ids = new Set();
@@ -74,35 +75,16 @@ function extractCuratedIdsFromHtml(html) {
 }
 
 async function fetchCuratedIds() {
-  const sets = [];
+  const all = new Set();
   for (const url of CURATED_DOCS) {
     try {
       const res = await fetch(url, { headers: { 'Accept': 'text/html' }, cf: { cacheTtl: 300 } });
       if (!res.ok) continue;
       const html = await res.text();
       const ids = extractCuratedIdsFromHtml(html);
-      if (ids.size) sets.push(ids);
+      for (const id of ids) all.add(id);
     } catch (_) {}
   }
-  if (sets.length === 0) return new Set();
-  if (sets.length === 1) return sets[0];
-  // intersection on normalized form
-  const norm = (s) => s.toLowerCase().replace(/[\s\/\._]+/g, '-').replace(/-free$/, '');
-  const setA = new Set([...sets[0]].map((s) => norm(s)));
-  const setB = new Set([...sets[1]].map((s) => norm(s)));
-  const interNorm = new Set([...setA].filter((x) => setB.has(x)));
-  if (interNorm.size) {
-    // return raw ids that correspond to inter (from first set's raw values that normalize to inter)
-    const out = new Set();
-    for (const raw of sets[0]) if (interNorm.has(norm(raw))) out.add(raw);
-    for (const raw of sets[1]) if (interNorm.has(norm(raw))) out.add(raw);
-    // also add normalized forms for convenience
-    for (const n of interNorm) out.add(n);
-    return out;
-  }
-  // fallback to union if intersection empty
-  const all = new Set();
-  for (const s of sets) for (const id of s) all.add(id);
   return all;
 }
 
@@ -374,43 +356,40 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
     });
   }
 
-  // 2. curated OC-only models that have pricing but no AA score → keep as off-map (honest)
-  //    Docs-derived roster (Go ∩ Zen, from fetchCuratedIds) + legacy curated ids.
-  const pool = new Set(CURATED_FALLBACK_IDS);
-  if (curatedDocsIds && curatedDocsIds.size) {
-    for (const id of curatedDocsIds) pool.add(id);
-  }
+  // 2. Roster models the join missed → keep as off-map (honest), never silently dropped.
+  //    Roster = docs-derived Go table (from fetchCuratedIds); legacy ids only when docs are unreachable.
+  const pool = (curatedDocsIds && curatedDocsIds.size) ? curatedDocsIds : new Set(CURATED_FALLBACK_IDS);
   for (const id of pool) {
     const variants = [id, normSlug(id), dashNorm(id), AA_SLUG[id], normSlug(AA_SLUG[id] || '')].filter(Boolean);
     if (variants.some((v) => seen.has(v) || seen.has(normSlug(v)) || seen.has(dashNorm(v)))) continue;
-    if (variants.some((v) => aaMap.has(v) || aaMap.has(normSlug(v)) || aaMap.has(dashNorm(v)))) continue;
     const md = variants.map((v) => mdMap.get(v)).find(Boolean) || null;
-    if (!md) continue;
-    const cost = md.cost.output;
-    const label = md.name || id;
+    const aaRec = variants.map((v) => aaMap.get(v)).find(Boolean) || null;
+    if (!md && !aaRec) continue; // in no source at all — nothing honest to show
     // prefer a clean canonical id (no provider slash, no whitespace, lowercase)
     const clean = (s) => /^[a-z0-9][a-z0-9._-]*$/i.test(s) && !s.includes('/') && !/\s/.test(s);
-    let emitId = md.id || id;
+    let emitId = (md && md.id) || id;
     if (!clean(emitId)) {
-      const base = String(md.id || '').split('/').pop();
+      const base = String(emitId || '').split('/').pop();
       emitId = variants.find((v) => clean(v) && (v.toLowerCase() === base.toLowerCase() || dashNorm(v) === dashNorm(base)))
         || variants.find((v) => clean(v))
-        || dashNorm(md.id || id);
+        || dashNorm(md && md.id || id);
     }
     emitId = String(emitId).toLowerCase();
+    const cost = md ? md.cost.output : null;
+    const label = (md && md.name) || (aaRec && aaRec.shortName) || id;
     out.push({
       id: emitId,
       label,
-      author: null,
+      author: aaRec ? aaRec.creator : null,
       ocCostPerM: cost,
-      ocCost: md.cost,
-      intelligenceIndex: null,
-      aa: null,
-      contextWindowTokens: md.limit && md.limit.context || null,
-      reasoning: !!md.reasoning,
-      openWeights: md.openWeights,
+      ocCost: md ? md.cost : null,
+      intelligenceIndex: aaRec ? aaRec.intelligenceIndex : null,
+      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url } : null,
+      contextWindowTokens: md && md.limit && md.limit.context || null,
+      reasoning: md ? !!md.reasoning : false,
+      openWeights: md && md.openWeights != null ? md.openWeights : (aaRec ? !!aaRec.isOpenWeights : false),
       plot: false,
-      excludeReason: 'Not scored on the Artificial Analysis Intelligence Index yet.',
+      excludeReason: !md ? 'Missing pricing' : 'Not scored on the Artificial Analysis Intelligence Index yet.',
       hue: hueFor(null),
       weeklyTokensT: null,
       rank: null,
@@ -507,7 +486,7 @@ export default {
           if (!slug || seenSlugs.has(slug) || aaMap.has(slug)) continue;
           seenSlugs.add(slug);
           need.push(slug);
-          if (need.length >= 10) break;
+          if (need.length >= 15) break;
         }
         if (need.length) {
           const pages = await Promise.all(need.map((s) =>
