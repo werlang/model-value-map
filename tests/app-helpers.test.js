@@ -109,3 +109,42 @@ test('fmtCtx renders token windows in compact notation', () => {
   assert.equal(fmtCtx(1048576), '1M');
   assert.equal(fmtCtx(256000), '256k');
 });
+
+// ---------- extractCuratedIds (Go/Zen docs) ----------
+
+test('extractCuratedIds reads MODEL ID table cells and list items', () => {
+  const { extractCuratedIds } = page().internals;
+  const html = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>
+    <tr><td>GPT 5.6 Luna</td><td>gpt-5.6-luna</td></tr>
+    <tr><td>DeepSeek V4 Flash</td><td>deepseek-v4-flash</td></tr>
+  </tbody></table><ul><li><strong>MiMo-V2.5</strong></li></ul>`;
+  const ids = extractCuratedIds(html);
+  assert.ok(ids.has('gpt-5.6-luna'), 'exact MODEL ID cell');
+  assert.ok(ids.has('deepseek-v4-flash'), 'exact MODEL ID cell');
+  assert.ok(ids.has('mimo-v2.5'), 'list item raw form');
+  assert.ok(ids.has('mimo-v2-5'), 'list item normalized form');
+});
+
+test('extractCuratedIds ignores limit rows, prices and column headers', () => {
+  const { extractCuratedIds } = page().internals;
+  const html = `<table><thead><tr><th>Model</th><th>requests per week</th></tr></thead><tbody>
+    <tr><td>Kimi K3</td><td>250</td></tr></tbody></table>
+    <table><thead><tr><th>Model</th><th>Input</th></tr></thead><tbody>
+    <tr><td>GLM 5.2</td><td>$1.40</td></tr></tbody></table>
+    <ul><li><strong>5 hour limit</strong></li><li><strong>Weekly limit</strong></li></ul>`;
+  const ids = extractCuratedIds(html);
+  assert.ok(ids.has('kimi-k3'));
+  assert.ok(ids.has('glm-5-2'), 'display name normalized to dashes');
+  for (const s of ids) {
+    assert.ok(!s.toLowerCase().includes('limit'), 'no limit rows: ' + s);
+    assert.ok(!s.toLowerCase().includes('requests per'), 'no requests-per cells: ' + s);
+    assert.ok(!s.startsWith('$'), 'no prices: ' + s);
+  }
+});
+
+test('extractCuratedIds normalizes display names to dash slugs', () => {
+  const { extractCuratedIds } = page().internals;
+  const ids = extractCuratedIds('<ul><li><strong>Muse Spark 1.2 Contributor</strong></li></ul>');
+  assert.ok(ids.has('muse-spark-1-2-contributor'), 'spaces and dots normalized to dashes');
+  assert.ok(ids.has('Muse Spark 1.2 Contributor'), 'raw display name kept');
+});

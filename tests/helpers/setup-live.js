@@ -9,6 +9,17 @@ import {
 export const MODELS_DEV = 'https://models.dev/api.json';
 export const AA_INDEX = 'https://artificialanalysis.ai/models';
 export const WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
+export const WORKER_URL_RE = /^https:\/\/model-value-map-api\.pswerlang\.workers\.dev\/$/;
+export const CURATED_GO = 'https://opencode.ai/docs/go';
+export const CURATED_ZEN = 'https://opencode.ai/docs/zen';
+export const WORKER_CURATED = 'https://model-value-map-api.pswerlang.workers.dev/curated';
+
+function curatedHtmlFor(snapshot) {
+  const ids = snapshot.map((m) => m.id);
+  const rows = ids.map((id) => `<tr><td>${id} label</td><td>${id}</td></tr>`).join('');
+  const lis = ids.map((id) => `<li><strong>${id}</strong></li>`).join('');
+  return `<html><body><table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}</tbody></table><ul>${lis}</ul></body></html>`;
+}
 
 function buildWorkerModels(snapshot, coverage, modelsDev) {
   const AA_SLUG = {
@@ -27,6 +38,11 @@ function buildWorkerModels(snapshot, coverage, modelsDev) {
     'kimi-k2.7-code': 'kimi-k2-7-code',
     'kimi-k3': 'kimi-k3',
     'qwen3.7-plus': 'qwen3-7-plus',
+    'command-a-plus': 'cohere-command-a',
+    'claude-4-5-haiku-reasoning': 'claude-haiku-4-5',
+    'claude-4-5-haiku': 'claude-haiku-4-5',
+    'glm-5-3-flash': 'glm-5-3-flash',
+    'glm-5.3-flash': 'glm-5-3-flash',
   };
   const norm = (s) => (s||'').toLowerCase().replace(/[\/._]/g, '-');
   const reverse = Object.fromEntries(Object.entries(AA_SLUG).map(([k,v])=>[v,k]));
@@ -117,7 +133,7 @@ export function standardEnv(over = {}) {
   // Use a mutable holder so body can read the mocked clock after sb is created.
   let sbRef = null;
   const dynamicWorker = {
-    test: WORKER_URL,
+    test: WORKER_URL_RE,
     body: () => {
       const now = sbRef ? sbRef.Date.now() : (over.clockStart ?? DEFAULT_CLOCK_START);
       return JSON.stringify({ t: now, meta: { mocked: true }, models: workerModels });
@@ -125,13 +141,33 @@ export function standardEnv(over = {}) {
   };
   const workerRule = (() => {
     if (over.workerRule) return over.workerRule;
-    if (over.workerFail) return { test: WORKER_URL, fail: true };
-    if (over.workerT != null) return { test: WORKER_URL, json: { t: over.workerT, meta: { mocked: true }, models: workerModels } };
+    if (over.workerFail) return { test: WORKER_URL_RE, fail: true };
+    if (over.workerT != null) return { test: WORKER_URL_RE, json: { t: over.workerT, meta: { mocked: true }, models: workerModels } };
     return dynamicWorker;
   })();
 
   const rules = [];
   rules.push(workerRule);
+  // curated Go/Zen (app scrapes these at boot) + worker fallback
+  const goHtml = over.curatedGoHtml ?? curatedHtmlFor(snapshot);
+  const zenHtml = over.curatedZenHtml ?? curatedHtmlFor(snapshot);
+  const curatedIds = over.curatedIds ?? snapshot.map((m) => m.id);
+  const workerCuratedRule = (() => {
+    if (over.workerCuratedRule) return over.workerCuratedRule;
+    if (over.workerCuratedFail) return { test: WORKER_CURATED, fail: true };
+    return { test: WORKER_CURATED, json: { t: over.clockStart ?? DEFAULT_CLOCK_START, ids: curatedIds } };
+  })();
+  const goRule = (() => {
+    if (over.curatedGoRule) return over.curatedGoRule;
+    if (over.curatedGoFail) return { test: CURATED_GO, fail: true };
+    return { test: CURATED_GO, body: goHtml };
+  })();
+  const zenRule = (() => {
+    if (over.curatedZenRule) return over.curatedZenRule;
+    if (over.curatedZenFail) return { test: CURATED_ZEN, fail: true };
+    return { test: CURATED_ZEN, body: zenHtml };
+  })();
+  rules.push(goRule, zenRule, workerCuratedRule);
   if (over.aaPageRules) rules.push(...over.aaPageRules);
   else if (over.aaPageRule) rules.push(over.aaPageRule);
   else rules.push({ test: /^https:\/\/artificialanalysis\.ai\/models\/.+/, status: 404 });

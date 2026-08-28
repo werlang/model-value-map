@@ -9,14 +9,205 @@
   let MODELS = (SNAPSHOT && SNAPSHOT.models) || [];
   const STORE_KEY = 'mvm.hidden.v1';
 
+  // ---------- curated filter (Go/Zen) ----------
+  const CURATED_URLS = ['https://opencode.ai/docs/go', 'https://opencode.ai/docs/zen'];
+  const WORKER_CURATED_URL = 'https://model-value-map-api.pswerlang.workers.dev/curated';
+  let curatedSet = null;
+
+  function isCurated(m) {
+    if (!curatedSet) return true;
+    const cands = [
+      m.id,
+      m.id && m.id.toLowerCase(),
+      m.id && m.id.toLowerCase().replace(/[\/._]/g, '-'),
+      m.id && m.id.toLowerCase().replace(/[\s\/\._]+/g, '-'),
+      m.id && m.id.toLowerCase().replace(/-free$/, ''),
+      m.aa && m.aa.slug,
+      m.aa && m.aa.slug && m.aa.slug.toLowerCase(),
+      m.aa && m.aa.slug && m.aa.slug.toLowerCase().replace(/[\/._]/g, '-'),
+      m.aa && m.aa.slug && m.aa.slug.toLowerCase().replace(/[\s\/\._]+/g, '-'),
+    ].filter(Boolean);
+    for (const c of cands) if (curatedSet.has(c)) return true;
+    if (m.label) {
+      const slug = m.label.toLowerCase().replace(/[\s\/\._]+/g, '-');
+      if (curatedSet.has(slug)) return true;
+    }
+    return false;
+  }
+  function availableModels() {
+    return curatedSet ? MODELS.filter(isCurated) : MODELS;
+  }
+
   let plotted = [];
   let excluded = [];
   let tMax = 1;
   function recompute() {
-    plotted = MODELS.filter((m) => m.plot);
-    excluded = MODELS.filter((m) => !m.plot);
+    const avail = availableModels();
+    plotted = avail.filter((m) => m.plot);
+    excluded = avail.filter((m) => !m.plot);
     const tokenCounts = plotted.map((m) => m.weeklyTokensT).filter((t) => typeof t === 'number' && Number.isFinite(t) && t > 0);
     tMax = tokenCounts.length ? Math.max(1, ...tokenCounts) : 1;
+  }
+
+  function extractCuratedIds(html) {
+    const ids = new Set();
+    if (!html || typeof html !== 'string') return ids;
+    function isSpurious(low) {
+      return low.includes('limit') || low.includes('http') || low.includes('requests per') || low.includes('endpoint') || low.includes('package') || low.includes('hour') || low.includes('weekly') || low.includes('monthly');
+    }
+    try {
+      if (typeof DOMParser !== 'undefined') {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const tables = doc.querySelectorAll('table');
+        for (const tbl of tables) {
+          let headerCells = [...tbl.querySelectorAll('thead th')];
+          if (!headerCells.length) {
+            const firstRow = tbl.querySelector('tr');
+            if (firstRow) headerCells = [...firstRow.querySelectorAll('th, td')];
+          }
+          const headers = headerCells.map((th) => th.textContent.trim().toLowerCase());
+          let colIdx = -1;
+          for (let i = 0; i < headers.length; i++) if (headers[i].includes('model id')) { colIdx = i; break; }
+          if (colIdx === -1) for (let i = 0; i < headers.length; i++) if (headers[i] === 'model') { colIdx = i; break; }
+          if (colIdx === -1) continue;
+          const rows = tbl.querySelectorAll('tbody tr');
+          const rowList = rows.length ? [...rows] : [...tbl.querySelectorAll('tr')].slice(1);
+          for (const row of rowList) {
+            const cells = [...row.querySelectorAll('td')];
+            if (cells.length <= colIdx) continue;
+            let raw = cells[colIdx].textContent.trim().replace(/:+$/, '').trim();
+            if (!raw || raw.toLowerCase() === 'model' || raw.toLowerCase() === 'model id') continue;
+            raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
+            if (raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
+            const low = raw.toLowerCase();
+            if (isSpurious(low)) continue;
+            ids.add(raw);
+            ids.add(low);
+            ids.add(low.replace(/[\s\/\._]+/g, '-'));
+            ids.add(low.replace(/[\/._]/g, '-'));
+            const noFree = low.replace(/-free$/, '');
+            if (noFree !== low) {
+              ids.add(noFree);
+              ids.add(noFree.replace(/[\s\/\._]+/g, '-'));
+            }
+          }
+        }
+        for (const el of doc.querySelectorAll('ul li strong')) {
+          let raw = el.textContent.trim().replace(/:+$/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
+          if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
+          const low = raw.toLowerCase();
+          if (isSpurious(low)) continue;
+          ids.add(raw);
+          ids.add(low);
+          ids.add(low.replace(/[\s\/\._]+/g, '-'));
+          ids.add(low.replace(/[\/._]/g, '-'));
+        }
+        if (ids.size) return ids;
+      }
+    } catch (_) {}
+    const tdRe = /<t[dh][^>]*>([^<]*?)<\/t[dh]>/gi;
+    let m;
+    while ((m = tdRe.exec(html))) {
+      let raw = m[1].replace(/<[^>]+>/g, '').replace(/&#x[^;]+;/g, ' ').replace(/&[^;]+;/g, ' ').trim().replace(/:+$/, '').trim();
+      raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
+      const low = raw.toLowerCase();
+      if (low === 'model' || low === 'model id' || isSpurious(low) || low.includes('endpoint') || low.includes('package')) continue;
+      if (/^\$/.test(raw) || /^\d+[\d,\.]*$/.test(raw)) continue;
+      ids.add(raw);
+      ids.add(low);
+      ids.add(low.replace(/[\s\/\._]+/g, '-'));
+      ids.add(low.replace(/[\/._]/g, '-'));
+      const noFree = low.replace(/-free$/, '');
+      if (noFree !== low) { ids.add(noFree); ids.add(noFree.replace(/[\s\/\._]+/g, '-')); }
+    }
+    const liRe = /<li[^>]*>\s*<strong[^>]*>([\s\S]*?)<\/strong>/gi;
+    while ((m = liRe.exec(html))) {
+      let raw = m[1].replace(/<[^>]+>/g, '').trim().replace(/:+$/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
+      if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
+      const low = raw.toLowerCase();
+      if (isSpurious(low)) continue;
+      ids.add(raw);
+      ids.add(low);
+      ids.add(low.replace(/[\s\/\._]+/g, '-'));
+      ids.add(low.replace(/[\/._]/g, '-'));
+    }
+    return ids;
+  }
+
+  function applyCuratedIds(rawSet) {
+    if (!rawSet || !rawSet.size) return false;
+    const expanded = new Set();
+    for (const id of rawSet) {
+      const low = id.toLowerCase().trim();
+      expanded.add(id.trim());
+      expanded.add(low);
+      expanded.add(low.replace(/[\s\/\._]+/g, '-'));
+      expanded.add(low.replace(/[\/._]/g, '-'));
+      const noFree = low.replace(/-free$/, '');
+      if (noFree !== low) {
+        expanded.add(noFree);
+        expanded.add(noFree.replace(/[\s\/\._]+/g, '-'));
+      }
+      const slugNoParen = low.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      if (slugNoParen !== low) {
+        expanded.add(slugNoParen);
+        expanded.add(slugNoParen.replace(/[\s\/\._]+/g, '-'));
+      }
+    }
+    curatedSet = expanded;
+    // prune hidden to available
+    const availIds = new Set(availableModels().map((mm) => mm.id));
+    for (const hid of [...hidden]) if (!availIds.has(hid)) hidden.delete(hid);
+    recompute();
+    renderExcluded();
+    renderToggles();
+    updateTable();
+    render();
+    return true;
+  }
+
+  async function loadCurated() {
+    const sets = [];
+    for (const url of CURATED_URLS) {
+      try {
+        const res = await fetch(url, { headers: { 'Accept': 'text/html' }, credentials: 'omit', referrerPolicy: 'no-referrer' });
+        if (!res.ok) continue;
+        const html = await res.text();
+        const ids = extractCuratedIds(html);
+        if (ids.size) sets.push(ids);
+      } catch (_) {}
+    }
+    let curatedRaw = null;
+    if (sets.length === 2) {
+      const norm = (s) => s.toLowerCase().replace(/[\s\/\._]+/g, '-').replace(/-free$/, '');
+      const setA = new Set([...sets[0]].map((s) => norm(s)));
+      const setB = new Set([...sets[1]].map((s) => norm(s)));
+      const inter = new Set([...setA].filter((x) => setB.has(x)));
+      if (inter.size) {
+        curatedRaw = new Set();
+        for (const raw of sets[0]) if (inter.has(norm(raw))) curatedRaw.add(raw);
+        for (const raw of sets[1]) if (inter.has(norm(raw))) curatedRaw.add(raw);
+        for (const n of inter) curatedRaw.add(n);
+      } else {
+        curatedRaw = new Set([...sets[0], ...sets[1]]);
+      }
+    } else if (sets.length === 1) {
+      curatedRaw = sets[0];
+    }
+    if (curatedRaw && curatedRaw.size) {
+      applyCuratedIds(curatedRaw);
+      return;
+    }
+    try {
+      const res = await fetch(WORKER_CURATED_URL, { headers: { 'Accept': 'application/json' }, credentials: 'omit', referrerPolicy: 'no-referrer' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.ids) && data.ids.length) {
+          applyCuratedIds(new Set(data.ids));
+        }
+      }
+    } catch (_) {}
   }
 
   // ---------- state ----------
@@ -437,7 +628,7 @@
   function regroup() {
     labOrder = [];
     byLab = new Map();
-    for (const m of MODELS) {
+    for (const m of availableModels()) {
       const lab = m.author || 'Other';
       if (!byLab.has(lab)) { byLab.set(lab, []); labOrder.push(lab); }
       byLab.get(lab).push(m);
@@ -695,7 +886,7 @@
   function applyLiveResult(res) {
     if (res && res.models) {
       MODELS = res.models;
-      for (const id of [...hidden]) if (!MODELS.some((m) => m.id === id)) hidden.delete(id);
+      for (const id of [...hidden]) if (!availableModels().some((m) => m.id === id)) hidden.delete(id);
       activeId = null;
       recompute();
       renderExcluded();
@@ -734,6 +925,9 @@
   ro.observe(holder);
   render();
 
+  // fetch curated Go/Zen list (non-blocking) — filters to ~18 when available
+  loadCurated();
+
   // Wire refresh button and trigger live data fetch
   refreshBtn.addEventListener('click', () => refreshLive(true));
   if (window.LiveData) {
@@ -744,5 +938,5 @@
 
   // Headless test seam: pure helpers only — nothing here captures DOM nodes
   // or mutable state, so exposing them has no effect on page behavior.
-  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx };
+  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, extractCuratedIds, isCurated, availableModels };
 })();

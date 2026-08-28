@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { standardEnv, MODELS_DEV, AA_INDEX } from './helpers/setup-live.js';
+import { standardEnv, MODELS_DEV, AA_INDEX, CURATED_GO, CURATED_ZEN, WORKER_CURATED } from './helpers/setup-live.js';
 import { makeStorage } from './helpers/storage.js';
 import { DEFAULT_CLOCK_START } from './helpers/sandbox.js';
 import {
@@ -385,4 +385,72 @@ test('chart loading spinner hides when live fetch fails', async () => {
   const env = await bootOffline();
   const chartLoading = env.sb.el('chart-loading');
   assert.ok(!chartLoading.classList.contains('is-visible'), 'chart loading spinner is hidden after failed fetch');
+});
+
+// ---------- curated Go/Zen filtering ----------
+
+/** Worker returns the full roster (curated + non-curated noise), like the real worker. */
+function noiseModel() {
+  return {
+    id: 'claude-fable-5', label: 'Claude Fable 5', author: 'Anthropic', hue: '#0C8599',
+    rank: 30, weeklyTokensT: 0.5, ocCostPerM: 50, ocCost: { input: 10, output: 50, cached: 1 },
+    reasoning: true, openWeights: false, contextWindowTokens: 200000,
+    aa: { name: 'Claude Fable 5', intelligenceIndex: 60, effort: null, url: 'https://artificialanalysis.ai/models/claude-fable-5' },
+    plot: true,
+  };
+}
+
+function curatedPage(over = {}) {
+  const models = over.models ?? fullSnapshot();
+  const full = [...models, noiseModel()];
+  return standardEnv({ loadApp: true, snapshot: models, workerModels: full, ...over });
+}
+
+test('boot filters the full worker roster down to the curated Go/Zen set', async () => {
+  const env = curatedPage();
+  await env.sb.settle();
+  // noise model (claude-fable-5) is not on the Go/Zen docs → hidden everywhere
+  assert.equal(dotOf(env, 'claude-fable-5'), undefined);
+  assert.equal(env.sb.el('toggles').querySelector('[data-chip="claude-fable-5"]'), null);
+  assert.equal(env.sb.el('toggles').querySelectorAll('[data-chip]').length, 6);
+  // curated members stay: 4 plotted dots
+  assert.equal(dotsOf(env).length, 4);
+});
+
+test('live refresh keeps the curated filter applied', async () => {
+  const env = curatedPage();
+  await env.sb.settle();
+  assert.ok(env.sb.el('stamp').classList.contains('live'));
+  assert.equal(dotsOf(env).length, 4);
+  assert.equal(dotOf(env, 'claude-fable-5'), undefined);
+});
+
+test('when curated docs and the worker curated endpoint all fail, nothing is filtered', async () => {
+  const env = curatedPage({ curatedGoFail: true, curatedZenFail: true, workerCuratedFail: true });
+  await env.sb.settle();
+  assert.equal(dotsOf(env).length, 5); // full roster including the noise model
+});
+
+test('worker curated endpoint covers a direct docs failure (CORS blocked)', async () => {
+  const env = curatedPage({ curatedGoFail: true, curatedZenFail: true });
+  await env.sb.settle();
+  assert.equal(dotOf(env, 'claude-fable-5'), undefined);
+  assert.equal(dotsOf(env).length, 4);
+});
+
+test('go/zen intersection: models listed on only one page stay off the map', async () => {
+  const models = fullSnapshot();
+  const rows = models.map((m) => `<tr><td>${m.label}</td><td>${m.id}</td></tr>`).join('');
+  const goOnly = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}<tr><td>Go Only Model</td><td>go-only-model</td></tr></tbody></table>`;
+  const zenOnly = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}<tr><td>Zen Only Model</td><td>zen-only-model</td></tr></tbody></table>`;
+  const base = models[0];
+  const full = [...models,
+    { ...base, id: 'go-only-model', label: 'Go Only Model', aa: { ...base.aa, name: 'Go Only', intelligenceIndex: 40, url: 'https://x/go' } },
+    { ...base, id: 'zen-only-model', label: 'Zen Only Model', aa: { ...base.aa, name: 'Zen Only', intelligenceIndex: 41, url: 'https://x/zen' } },
+  ];
+  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedGoHtml: goOnly, curatedZenHtml: zenOnly });
+  await env.sb.settle();
+  assert.equal(dotOf(env, 'go-only-model'), undefined);
+  assert.equal(dotOf(env, 'zen-only-model'), undefined);
+  assert.equal(dotsOf(env).length, 4);
 });
