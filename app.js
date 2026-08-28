@@ -404,13 +404,12 @@
     excludedEl.innerHTML = excluded.map((m) => {
       const known = m.ocCostPerM != null
         ? `$${m.ocCostPerM}/1M`
-        : (m.aa ? `II ${m.aa.intelligenceIndex}` : 'no data');
-      const missingAxis = m.ocCostPerM == null ? 'missing cost' : 'missing score';
+        : (m.aa && typeof m.aa.intelligenceIndex === 'number' ? `Score ${m.aa.intelligenceIndex}` : 'no data');
       return `<li>
         <div class="excluded-row">
-          <span class="chip-dot" style="--chip-c:${m.hue}"></span>
+          <span class="chip-dot" style="--chip-c:${m.hue || '#8593a8'}"></span>
           <span class="excluded-name">${esc(m.label)}</span>
-          <span class="excluded-axis">${known} · ${missingAxis}</span>
+          <span class="excluded-axis">${known}</span>
         </div>
         <p class="excluded-reason">${esc(m.excludeReason)}</p>
       </li>`;

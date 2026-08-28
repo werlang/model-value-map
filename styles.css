@@ -856,6 +856,10 @@ body {
   .axis-note {
     font-size: 10px;
   }
+  .readout-members li {
+    padding: 4px 0;
+    font-size: 11.5px;
+  }
   .readout-model-title {
     font-size: 14px;
   }
@@ -865,6 +869,18 @@ body {
   }
   .readout-grid dd {
     font-size: 12px;
+  }
+  .excluded-list li {
+    padding: 5px 0;
+  }
+  .excluded-name {
+    font-size: 11.5px;
+  }
+  .excluded-axis {
+    font-size: 10.5px;
+  }
+  .excluded-reason {
+    font-size: 11px;
   }
   .toggles-head {
     flex-direction: column;
