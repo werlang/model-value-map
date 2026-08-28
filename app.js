@@ -116,6 +116,19 @@
   let cur = null; // live scales + crosshair layer for setActive
 
   function render() {
+    if (lastFetchError && !MODELS.length) {
+      holder.replaceChildren();
+      const msg = document.createElement('div');
+      msg.className = 'chart-error';
+      msg.setAttribute('role', 'alert');
+      msg.innerHTML = '<h3 class="chart-error-title">Failed to load data</h3><p class="chart-error-text">The worker is unreachable. Please check your connection and try again.</p><button type="button" class="chart-error-retry" onclick="document.getElementById(\'stamp-refresh\').click()">Retry</button>';
+      holder.appendChild(msg);
+      if (chartLoadingEl) holder.appendChild(chartLoadingEl);
+      renderReadout(null, []);
+      renderCount(0, 0);
+      syncChips();
+      return;
+    }
     const w = Math.max(260, Math.round(holder.clientWidth) || 320);
     const h = holder.clientHeight > 100 ? holder.clientHeight : Math.round(Math.min(680, Math.max(380, w * 0.56)));
     const { xd, yd, xt, yt } = computeDomains();
@@ -645,14 +658,19 @@
     return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
   }
 
+  let lastFetchError = false;
   function updateStamp(res) {
     refreshBtn.classList.remove('spinning');
     refreshBtn.disabled = false;
     if (!res) {
+      lastFetchError = true;
       setChartLoading(false);
-      setStamp('error', 'Snapshot Aug 23, 2026 · live fetch failed');
+      setStamp('error', 'Failed to load data — worker unreachable. Check connection and try again.');
+      // also render error state in chart if no data
+      if (!MODELS.length) render();
       return;
     }
+    lastFetchError = false;
     if (res.state === 'loading') {
       setChartLoading(true);
       refreshBtn.classList.add('spinning');

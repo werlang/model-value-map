@@ -1,0 +1,12 @@
+name = "model-value-map-api"
+main = "worker/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+AA_INDEX_VERSION = "4.1"
+
+# AA_API_KEY must be set as a secret: `npx wrangler secret put AA_API_KEY`
+# KV not needed — worker is stateless, response is cached via Cache API / CDN
+
+[observability]
+enabled = true

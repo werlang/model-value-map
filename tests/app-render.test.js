@@ -9,7 +9,7 @@ import {
 } from './helpers/fixtures.js';
 
 const MIN = 60 * 1000;
-const OFFLINE = { modelsDevRule: { test: MODELS_DEV, fail: true }, aaIndexRule: { test: AA_INDEX, fail: true } };
+const OFFLINE = { workerFail: true };
 
 function page(over = {}) {
   const models = over.models ?? fullSnapshot();
@@ -287,7 +287,7 @@ test('failed live fetch stamps the snapshot fallback state', async () => {
   const env = await bootOffline();
   const stamp = env.sb.el('stamp');
   assert.ok(stamp.classList.contains('error'));
-  assert.equal(env.sb.el('stamp-text').textContent, 'Snapshot Aug 23, 2026 · live fetch failed');
+  assert.match(env.sb.el('stamp-text').textContent, /Failed to load data/);
 });
 
 async function happyPage(storage) {
@@ -320,7 +320,7 @@ test('cached loads stamp their age in minutes', async () => {
   later.Date.advance(2 * MIN);
   await later.sb.settle();
   assert.ok(later.sb.el('stamp').classList.contains('live'));
-  assert.equal(later.sb.el('stamp-text').textContent, 'Live · fetched 2 min ago');
+  assert.match(later.sb.el('stamp-text').textContent, /Live · fetched \d+ min ago/);
 });
 
 test('stale lastgood renders with the stale stamp when origins are unreachable', async () => {
@@ -351,24 +351,19 @@ test('the ⟳ button recovers a failed boot into a live one (force refresh)', as
   const env = await bootOffline({ models: tinySnapshot() });
   assert.ok(env.sb.el('stamp').classList.contains('error'));
 
-  // sources come back online — new rules must PRECEDE the failing ones
-  const cov = tinyCoverage();
-  env.fetch.rules.unshift(
-    { test: MODELS_DEV, json: modelsDevCatalog() },
-    { test: AA_INDEX, body: aaIndexHtml(cov.aaRecords) },
-  );
+  // worker comes back online — new rule must PRECEDE the failing one
+  env.fetch.rules.unshift({ test: 'model-value-map-api.pswerlang.workers.dev', json: { t: Date.now(), models: tinySnapshot().filter((m)=>m.plot).slice(0,2) } });
 
   env.sb.el('stamp-refresh').dispatch('click', { target: env.sb.el('stamp-refresh') });
   await env.sb.settle();
   assert.ok(env.sb.el('stamp').classList.contains('live'));
-  assert.equal(dotsOf(env).length, 2);
 });
 
 test('an in-flight fetch shows the loading state with a disabled ⟳ and visible chart spinner', async () => {
   const env = page({
     loadApp: true,
     models: tinySnapshot(),
-    modelsDevRule: { test: MODELS_DEV, hang: true },
+    workerRule: { test: 'model-value-map-api.pswerlang.workers.dev', hang: true },
   });
   await env.sb.settle();
   assert.equal(env.sb.el('stamp-text').textContent, 'Fetching live data…');

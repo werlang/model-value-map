@@ -120,9 +120,8 @@ test('missing cost marks the model as excluded with reason', async () => {
     coverage: cov,
   });
   const model = byId(res.models, 'free-eval');
-  assert.ok(model);
-  assert.equal(model.plot, false);
-  assert.equal(model.excludeReason, 'Missing pricing');
+  // Worker filters to OC-available only — free-eval has AA but no OC cost, so not shown (not noisy off-map)
+  assert.equal(model, undefined);
 });
 
 test('all plotted models have positive cost and positive intelligence', async () => {

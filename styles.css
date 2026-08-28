@@ -369,6 +369,44 @@ body {
   .chart-spinner { animation: none; }
 }
 
+.chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 24px;
+  gap: 8px;
+  min-height: 300px;
+}
+.chart-error-title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.chart-error-text {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+.chart-error-retry {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--frontier);
+  border: 1px solid var(--frontier);
+  border-radius: var(--radius-chip);
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.chart-error-retry:hover { background: #1a3dc0; }
+
 .chart-svg {
   display: block;
   width: 100%;

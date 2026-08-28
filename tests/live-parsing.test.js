@@ -39,7 +39,8 @@ test('effort.label is lifted to the effort field; absent effort stays null', asy
   ];
   const { res } = await run({ coverage: cov });
   assert.equal(byId(res.models, 'kimi-k3').aa.effort, 'max');
-  assert.equal(byId(res.models, 'mimo-v2-5-0424').aa.effort, null);
+  // mimo-v2-5-0424 maps to curated OC id mimo-v2.5 (AA_SLUG)
+  assert.equal(byId(res.models, 'mimo-v2.5').aa.effort, null);
 });
 
 test('isOpenWeights is coerced to a real boolean', async () => {
@@ -116,7 +117,7 @@ test('a malformed record push is skipped without killing sibling records', async
     aaIndexRule: { test: /^https:\/\/artificialanalysis\.ai\/models$/, body: html },
   });
   assert.equal(byId(res.models, 'kimi-k3').aa.intelligenceIndex, 59.7);
-  assert.equal(byId(res.models, 'mimo-v2-5-0424').aa.intelligenceIndex, 38.04);
+  assert.equal(byId(res.models, 'mimo-v2.5').aa.intelligenceIndex, 38.04);
 });
 
 test('a record truncated mid-object is skipped, siblings parsed', async () => {

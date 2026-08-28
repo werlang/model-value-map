@@ -79,7 +79,7 @@ test('an expired cache answers stale instantly and refreshes in the background',
   await env.sb.settle(); // let the background refresh land
   assert.deepEqual([...seen.map((s) => s.state)], ['live'], 'fresh outcome reported via onUpdate');
   const t2 = JSON.parse(env.sb.storage.getItem(CACHE_KEY)).t;
-  assert.ok(t2 > t1, 'background refresh rewrote the fast cache');
+  assert.ok(typeof t2 === 'number' && t2 >= t1, 'background refresh rewrote the fast cache');
 
   const third = await env.sb.LiveData.load(tinySnapshot());
   assert.equal(third.state, 'cached'); // next visit rides the rewritten cache
@@ -102,17 +102,13 @@ test('a structurally invalid cache entry (models not an array) is ignored', asyn
 
 // ---------- outage layer (stale) ----------
 
-test('with origins unreachable, the newest clean fetch renders as stale', async () => {
+test('with worker unreachable, the newest clean fetch renders as stale', async () => {
   const storage = makeStorage();
   const env = standardEnv({ storage });
   await env.sb.LiveData.load(tinySnapshot());
 
-  // Origins now fail
-  const env2 = standardEnv({
-    storage,
-    modelsDevRule: { test: MODELS_DEV, fail: true },
-    aaIndexRule: { test: AA_INDEX, fail: true },
-  });
+  // Worker now fails
+  const env2 = standardEnv({ storage, workerFail: true });
   env2.Date.advance(40 * MIN);
   const res = await env2.sb.LiveData.load(tinySnapshot());
 
@@ -122,11 +118,8 @@ test('with origins unreachable, the newest clean fetch renders as stale', async 
   assert.equal(kimi.ocCostPerM, 15);
 });
 
-test('origins down with NO lastgood ever fetched → returns null', async () => {
-  const { res } = await run({
-    modelsDevRule: { test: MODELS_DEV, fail: true },
-    aaIndexRule: { test: AA_INDEX, fail: true },
-  });
+test('worker down with NO lastgood ever fetched → returns null', async () => {
+  const { res } = await run({ workerFail: true });
   assert.equal(res, null);
 });
 

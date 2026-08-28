@@ -11,45 +11,25 @@ async function run(over = {}) {
   return { ...env, res };
 }
 
-// ---------- direct fetching ----------
+// ---------- worker fetching ----------
 
-test('requests are sent directly to models.dev and artificialanalysis.ai', async () => {
+test('requests are sent to the sanitized worker', async () => {
   const { fetch, res } = await run();
   assert.ok(res);
   assert.equal(res.state, 'live');
-  assert.ok(fetch.calls.includes(MODELS_DEV), 'models.dev requested directly');
-  assert.ok(fetch.calls.includes(AA_INDEX), 'artificialanalysis.ai requested directly');
+  assert.ok(fetch.calls.some((u) => u.includes('model-value-map-api')), 'worker requested');
 });
 
-test('parallel fetch: both endpoints are hit in the same load', async () => {
-  const { fetch, res } = await run();
-  assert.equal(res.state, 'live');
-  const mdIdx = fetch.calls.indexOf(MODELS_DEV);
-  const aaIdx = fetch.calls.indexOf(AA_INDEX);
-  assert.ok(mdIdx >= 0 && aaIdx >= 0);
-});
-
-test('a missing AA index model fetches per-model page if needed', async () => {
+test('worker payload is used directly (no per-model fallback needed)', async () => {
   const cov = tinyCoverage();
-  cov.aaRecords = [aaModel({ slug: 'kimi-k3' })]; // mimo missing from index
-
-  const { fetch, res } = await run({
-    coverage: cov,
-    aaPageRules: [
-      { test: /models\/mimo-v2-5-0424$/, body: aaPageHtml(aaModel({ slug: 'mimo-v2-5-0424', intelligenceIndex: 39.5 })) },
-    ],
-  });
-
+  cov.aaRecords = [aaModel({ slug: 'kimi-k3' }), aaModel({ slug: 'mimo-v2-5-0424', intelligenceIndex: 39.5 })];
+  const { res } = await run({ coverage: cov });
   assert.equal(res.state, 'live');
-  assert.ok(fetch.calls.some((u) => u.includes('mimo-v2-5-0424')));
   const mimo = res.models.find((m) => m.id === 'mimo-v2.5');
   assert.equal(mimo.aa.intelligenceIndex, 39.5);
 });
 
-test('both origins unreachable returns null when no cache exists', async () => {
-  const { res } = await run({
-    modelsDevRule: { test: MODELS_DEV, fail: true },
-    aaIndexRule: { test: AA_INDEX, fail: true },
-  });
+test('worker unreachable returns null when no cache exists', async () => {
+  const { res } = await run({ workerFail: true });
   assert.equal(res, null);
 });
