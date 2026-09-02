@@ -176,9 +176,11 @@ function aaRecordFromObj(o) {
 /** Full model records embedded in the AA flight payload (inert text). */
 function scanAaFlightRecords(flight) {
   const out = new Map();
-  const re = /\{"id":"[0-9a-f-]{36}","slug":"/g;
+  if (!flight || typeof flight !== 'string') return out;
+  // Phase 1: strict detailed records with id prefix (fast path for index pages)
+  const reId = /\{"id":"[0-9a-f-]{36}","slug":"/g;
   let m;
-  while ((m = re.exec(flight))) {
+  while ((m = reId.exec(flight))) {
     const end = matchBrace(flight, m.index);
     if (end < 0) continue;
     try {
@@ -186,6 +188,36 @@ function scanAaFlightRecords(flight) {
       const rec = aaRecordFromObj(o);
       if (rec && !out.has(rec.slug)) out.set(rec.slug, rec);
     } catch (_) {}
+  }
+  // Phase 2: lightweight per-model records that start with {"slug":" (no id) or inline model objects
+  // Scan every {"slug":" occurrence and try to parse its enclosing object; aaRecordFromObj filters non-models.
+  const reSlug = /\{"slug":"/g;
+  while ((m = reSlug.exec(flight))) {
+    const start = m.index;
+    // skip if this occurrence was already covered by the id-prefixed scan (same start overlaps)
+    // but cheap to re-parse; dedupe via map
+    const end = matchBrace(flight, start);
+    if (end < 0) continue;
+    // avoid parsing huge surrounding arrays — limit size
+    if (end - start > 50000) continue;
+    try {
+      const o = JSON.parse(flight.slice(start, end + 1));
+      const rec = aaRecordFromObj(o);
+      if (rec && !out.has(rec.slug)) out.set(rec.slug, rec);
+    } catch (_) {}
+  }
+  return out;
+}
+
+/** Extract all AA slugs present in the flight payload (for alias resolution, regardless of score). */
+function extractAllAaSlugs(flight) {
+  const out = new Set();
+  if (!flight || typeof flight !== 'string') return out;
+  const re = /"slug":"([^"]+)"/g;
+  let m;
+  while ((m = re.exec(flight))) {
+    const s = m[1];
+    if (s && s.length >= 2 && s.length <= 80 && /^[a-z0-9][a-z0-9._-]*$/i.test(s)) out.add(s);
   }
   return out;
 }
@@ -227,12 +259,152 @@ function extractAaIndexScores(html) {
 /** Public AA per-model page → the model's own full record (or null). */
 function extractAaModelPageRecord(html, slug) {
   if (!html || !slug) return null;
-  return scanAaFlightRecords(extractFlight(html)).get(slug) || null;
+  const rec = scanAaFlightRecords(extractFlight(html)).get(slug);
+  if (rec) return rec;
+  // fallback: lightweight scan may have extracted with different parsing window — try second pass over raw html flight
+  // already covered by scanAaFlightRecords above, so just return null
+  return null;
 }
 
 /** Fill aaMap with keyless scores for slugs the keyed API omitted. */
 function mergeAaScores(aaMap, extraMap) {
   for (const [slug, rec] of extraMap) if (!aaMap.has(slug)) aaMap.set(slug, rec);
+}
+
+// ---------- OC→AA resolver (automatic, no hand list required) ----------
+function ocVariantsDash(id) {
+  const d = dashNorm(id);
+  const out = [d];
+  let cur = d;
+  while (cur.includes('-')) {
+    const idx = cur.lastIndexOf('-');
+    cur = cur.slice(0, idx);
+    if (cur.length < 3) break;
+    out.push(cur);
+  }
+  return out;
+}
+
+function aaLookupNorm(slug, aaMap) {
+  if (!slug) return null;
+  if (aaMap.has(slug)) return aaMap.get(slug);
+  const d = dashNorm(slug);
+  if (aaMap.has(d)) return aaMap.get(d);
+  const n = normSlug(slug);
+  if (aaMap.has(n)) return aaMap.get(n);
+  return null;
+}
+
+function resolveAaSlugForOc(ocId, aaMap) {
+  if (!ocId || !aaMap) return null;
+  const d = dashNorm(ocId);
+  // 1. explicit override (dash-normalized key)
+  const over = AA_SLUG[ocId] || AA_SLUG[d] || AA_SLUG[normSlug(ocId)] || null;
+  if (over) {
+    const hit = aaLookupNorm(over, aaMap);
+    if (hit) return hit.slug;
+    // still consider over as candidate even if not yet scored — caller may fetch it
+  }
+  // 2. exact
+  if (aaMap.has(d)) return d;
+  if (aaMap.has(ocId)) return ocId;
+  // 3. stripped suffixes (muse-spark-1-3-contributor → muse-spark-1-3)
+  const vars = ocVariantsDash(ocId).slice(1);
+  for (const v of vars) if (aaMap.has(v)) return v;
+  // 4. prefix expansion: AA slug starts with OC dash + '-'  (qwen3-8-flash → qwen3-8-flash-next, mimo-v2-5 → mimo-v2-5-0424)
+  //    and reverse: OC starts with AA slug + '-' (deepseek-v4-flash-vision-exp → deepseek-v4-flash-vision)
+  let best = null;
+  let bestDiff = Infinity;
+  for (const slug of aaMap.keys()) {
+    if (slug.startsWith(d + '-') || d.startsWith(slug + '-')) {
+      const diff = Math.abs(slug.length - d.length);
+      // prefer shorter diff; tie-break by preferring scored slugs that are not xhigh variants? keep stable
+      if (diff < bestDiff) { best = slug; bestDiff = diff; }
+    }
+  }
+  return best;
+}
+
+function resolveAaRecordForOc(ocId, aaMap) {
+  const slug = resolveAaSlugForOc(ocId, aaMap);
+  return slug ? aaMap.get(slug) : null;
+}
+
+function mdLookupForAa(aaSlug, mdMap) {
+  if (!aaSlug || !mdMap) return null;
+  if (mdMap.has(aaSlug)) return mdMap.get(aaSlug);
+  const d = dashNorm(aaSlug);
+  if (mdMap.has(d)) return mdMap.get(d);
+  const n = normSlug(aaSlug);
+  if (mdMap.has(n)) return mdMap.get(n);
+  const rev = REVERSE_AA_SLUG[aaSlug] || REVERSE_AA_SLUG[d] || REVERSE_AA_SLUG[n] || null;
+  if (rev) {
+    if (mdMap.has(rev)) return mdMap.get(rev);
+    if (mdMap.has(dashNorm(rev))) return mdMap.get(dashNorm(rev));
+    if (mdMap.has(normSlug(rev))) return mdMap.get(normSlug(rev));
+  }
+  return null;
+}
+
+function resolveMdForAa(aaSlug, mdMap, curatedDashSet) {
+  const direct = mdLookupForAa(aaSlug, mdMap);
+  // collect all candidates that match via exact / stripped / prefix
+  const d = dashNorm(aaSlug);
+  const candidates = [];
+  const seenMd = new Set();
+  function addCand(md, kd, score) {
+    if (!md || seenMd.has(md)) return;
+    seenMd.add(md);
+    candidates.push({ md, kd, score });
+  }
+  if (direct) addCand(direct, dashNorm(direct.id || aaSlug), 0);
+  const vars = ocVariantsDash(aaSlug);
+  for (const v of vars.slice(1)) {
+    const hit = mdLookupForAa(v, mdMap);
+    if (hit) addCand(hit, dashNorm(v), Math.abs(d.length - dashNorm(v).length) + 0.1);
+  }
+  // prefix search over OC keys
+  for (const [k, v] of mdMap) {
+    const kd = dashNorm(k);
+    if (kd === d) {
+      addCand(v, kd, 0);
+    } else if (d.startsWith(kd + '-') || kd.startsWith(d + '-')) {
+      const diff = Math.abs(d.length - kd.length);
+      addCand(v, kd, diff + 0.5);
+    }
+  }
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0].md;
+  // rank: prefer curated, then smallest diff, then prefer larger kd (more specific, e.g., contributor) when diff tied? For muse, both diff 0 vs 12? Let's compute
+  // curatedDashSet gives priority to Go-listed variants
+  candidates.sort((a, b) => {
+    const aCur = curatedDashSet && curatedDashSet.has(a.kd) ? 0 : 1;
+    const bCur = curatedDashSet && curatedDashSet.has(b.kd) ? 0 : 1;
+    if (aCur !== bCur) return aCur - bCur;
+    if (a.score !== b.score) return a.score - b.score;
+    // tie-break: longer (more specific) first for contributor case where AA is prefix of OC
+    return b.kd.length - a.kd.length;
+  });
+  return candidates[0].md;
+}
+
+function bestFetchSlugForOc(ocId, allSlugs) {
+  if (!ocId || !allSlugs) return dashNorm(ocId);
+  const d = dashNorm(ocId);
+  const over = AA_SLUG[ocId] || AA_SLUG[d] || AA_SLUG[normSlug(ocId)] || null;
+  if (over && allSlugs.has(over)) return over;
+  if (allSlugs.has(d)) return d;
+  const vars = ocVariantsDash(ocId).slice(1);
+  for (const v of vars) if (allSlugs.has(v)) return v;
+  let best = null;
+  let bestDiff = Infinity;
+  for (const s of allSlugs) {
+    if (s.startsWith(d + '-') || d.startsWith(s + '-')) {
+      const diff = Math.abs(s.length - d.length);
+      if (diff < bestDiff) { best = s; bestDiff = diff; }
+    }
+  }
+  return best || d;
 }
 
 // ---------- OC parsing (models.dev) ----------
@@ -273,12 +445,23 @@ function parseModelsDev(data) {
         openWeights: m.open_weights != null ? !!m.open_weights : (m.openWeights != null ? !!m.openWeights : null),
         reasoning: !!m.reasoning,
       };
-      const keysToSet = [m.id, mKey, normSlug(m.id||''), normSlug(mKey)].filter(Boolean);
-      if (m.id && m.id.includes('/')) keysToSet.push(m.id.split('/').pop(), normSlug(m.id.split('/').pop()));
-      if (mKey.includes('/')) keysToSet.push(mKey.split('/').pop(), normSlug(mKey.split('/').pop()));
+      const keysToSet = [m.id, mKey, normSlug(m.id||''), normSlug(mKey), dashNorm(m.id||''), dashNorm(mKey)].filter(Boolean);
+      if (m.id && m.id.includes('/')) {
+        const base = m.id.split('/').pop();
+        keysToSet.push(base, normSlug(base), dashNorm(base));
+      }
+      if (mKey.includes('/')) {
+        const base2 = mKey.split('/').pop();
+        keysToSet.push(base2, normSlug(base2), dashNorm(base2));
+      }
       for (const k of keysToSet) {
         const ex = map.get(k);
         if (!ex || (ex.cost.output <= 0 && outCost > 0)) map.set(k, info);
+        // also ensure dash/norm variants of the key are independently reachable
+        const dk = dashNorm(k);
+        if (dk && dk !== k && !map.has(dk)) map.set(dk, info);
+        const nk = normSlug(k);
+        if (nk && nk !== k && nk !== dk && !map.has(nk)) map.set(nk, info);
       }
     }
   }
@@ -320,15 +503,53 @@ function parseAaFree(pages) {
 function buildModels(mdMap, aaMap, curatedDocsIds) {
   const out = [];
   const seen = new Set();
+  const poolForCurated = (curatedDocsIds && curatedDocsIds.size) ? curatedDocsIds : new Set(CURATED_FALLBACK_IDS);
+  const curatedDashSet = new Set([...poolForCurated].map((id) => dashNorm(id)));
 
-  // 1. AA models that are actually available at OpenCode (have OC pricing) — use OC id when reverse-mapped
+  // 1. AA models that are actually available at OpenCode (have OC pricing) — use OC id when reverse-mapped or fuzzy-matched
   for (const [slug, aa] of aaMap) {
-    const ocId = REVERSE_AA_SLUG[slug] || null;
-    const effectiveId = ocId || slug;
-    const lookupKey = ocId || AA_SLUG[slug] || normSlug(slug);
-    const md = mdMap.get(ocId) || mdMap.get(normSlug(ocId||'')) || mdMap.get(lookupKey) || mdMap.get(slug) || mdMap.get(normSlug(slug)) || null;
+    const md = resolveMdForAa(slug, mdMap, curatedDashSet);
     if (!md) continue; // not available at OpenCode — skip (prevents 600+ off-map noise)
-    seen.add(effectiveId); seen.add(normSlug(effectiveId)); seen.add(slug); seen.add(normSlug(slug));
+    // effective OC id: prefer reverse alias, then resolved OC key (curated-aware), then AA slug
+    let ocId = REVERSE_AA_SLUG[slug] || REVERSE_AA_SLUG[dashNorm(slug)] || null;
+    if (!ocId) {
+      // use the same curated-aware resolution that chose md to pick the best OC key
+      const candidates = [];
+      const d = dashNorm(slug);
+      for (const [k] of mdMap) {
+        const kd = dashNorm(k);
+        if (kd === d) { candidates.push({ k, kd, score: 0 }); }
+        else if (d.startsWith(kd + '-') || kd.startsWith(d + '-')) {
+          candidates.push({ k, kd, score: Math.abs(d.length - kd.length) + 0.5 });
+        }
+      }
+      // stripped AA variants
+      if (!candidates.length) {
+        const vars = ocVariantsDash(slug).slice(1);
+        for (const v of vars) {
+          if (mdMap.has(v)) { candidates.push({ k: v, kd: dashNorm(v), score: Math.abs(d.length - dashNorm(v).length) + 0.1 }); break; }
+          if (mdMap.has(dashNorm(v))) { candidates.push({ k: dashNorm(v), kd: dashNorm(v), score: Math.abs(d.length - dashNorm(v).length) + 0.1 }); break; }
+        }
+      }
+      if (candidates.length) {
+        candidates.sort((a, b) => {
+          const aCur = curatedDashSet.has(a.kd) ? 0 : 1;
+          const bCur = curatedDashSet.has(b.kd) ? 0 : 1;
+          if (aCur !== bCur) return aCur - bCur;
+          if (a.score !== b.score) return a.score - b.score;
+          return b.kd.length - a.kd.length;
+        });
+        ocId = candidates[0].k;
+      }
+      // fallback to md.id if no candidate (should not happen since md exists)
+      if (!ocId && md && md.id) ocId = md.id;
+    }
+    const effectiveIdRaw = ocId || md.id || slug;
+    const effectiveId = String(effectiveIdRaw).toLowerCase();
+    // dedupe: if we already emitted this OC model via another AA variant, keep highest intelligenceIndex
+    // For now, emit per AA slug but use seen to avoid duplicate effectiveIds with lower score?
+    // We add all, but track seen by effectiveId dash to allow multiple AA effort variants? Original emitted per AA slug; keep that.
+    // To avoid duplicate off-map, just add to seen set broad
     const cost = md.cost.output;
     const author = aa.creator || null;
     const label = aa.shortName || md.name || slug;
@@ -337,6 +558,20 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
     const openWeights = md.openWeights != null ? md.openWeights : !!aa.isOpenWeights;
     const plot = typeof cost === 'number' && cost > 0 && typeof aa.intelligenceIndex === 'number' && aa.intelligenceIndex > 0;
     const excludeReason = !plot ? (cost == null ? 'Missing pricing' : 'Missing intelligence score') : null;
+    // avoid emitting duplicate effectiveId if already plotted with same cost — keep highest intelligence
+    const seenKey = dashNorm(effectiveId);
+    if (seen.has(seenKey) && plot) {
+      // check existing entry for same effectiveId
+      const existing = out.find((x) => dashNorm(x.id) === seenKey && x.plot);
+      if (existing && existing.aa.intelligenceIndex >= aa.intelligenceIndex) continue;
+      // replace weaker variant
+      if (existing) {
+        const idx = out.indexOf(existing);
+        if (idx !== -1) out.splice(idx, 1);
+      }
+    }
+    seen.add(effectiveId); seen.add(normSlug(effectiveId)); seen.add(dashNorm(effectiveId)); seen.add(slug); seen.add(normSlug(slug)); seen.add(dashNorm(slug));
+    if (ocId) { seen.add(ocId); seen.add(normSlug(ocId)); seen.add(dashNorm(ocId)); }
     out.push({
       id: effectiveId,
       label,
@@ -358,25 +593,59 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
 
   // 2. Roster models the join missed → keep as off-map (honest), never silently dropped.
   //    Roster = docs-derived Go table (from fetchCuratedIds); legacy ids only when docs are unreachable.
-  const pool = (curatedDocsIds && curatedDocsIds.size) ? curatedDocsIds : new Set(CURATED_FALLBACK_IDS);
+  const pool = poolForCurated;
   for (const id of pool) {
-    const variants = [id, normSlug(id), dashNorm(id), AA_SLUG[id], normSlug(AA_SLUG[id] || '')].filter(Boolean);
-    if (variants.some((v) => seen.has(v) || seen.has(normSlug(v)) || seen.has(dashNorm(v)))) continue;
-    const md = variants.map((v) => mdMap.get(v)).find(Boolean) || null;
-    const aaRec = variants.map((v) => aaMap.get(v)).find(Boolean) || null;
+    const d = dashNorm(id);
+    const over = AA_SLUG[id] || AA_SLUG[d] || AA_SLUG[normSlug(id)] || null;
+    const variants = [id, normSlug(id), d, over, over ? normSlug(over) : null, over ? dashNorm(over) : null].filter(Boolean);
+    // also add stripped variants of d for seen check
+    const strippedVars = ocVariantsDash(id);
+    const allVariants = [...new Set([...variants, ...strippedVars, ...strippedVars.map(normSlug)])];
+    if (allVariants.some((v) => seen.has(v) || seen.has(normSlug(v)) || seen.has(dashNorm(v)))) continue;
+    // also check if any variant resolves to a scored AA via fuzzy
+    const fuzzySlug = resolveAaSlugForOc(id, aaMap);
+    if (fuzzySlug && (seen.has(fuzzySlug) || seen.has(dashNorm(fuzzySlug)) || seen.has(normSlug(fuzzySlug)))) continue;
+    const md = variants.map((v) => mdMap.get(v)).find(Boolean) || resolveMdForAa(d, mdMap) || null;
+    // prefer fuzzy AA match over exact variant
+    let aaRec = variants.map((v) => aaLookupNorm(v, aaMap)).find(Boolean) || null;
+    if (!aaRec) aaRec = resolveAaRecordForOc(id, aaMap) || null;
     if (!md && !aaRec) continue; // in no source at all — nothing honest to show
     // prefer a clean canonical id (no provider slash, no whitespace, lowercase)
     const clean = (s) => /^[a-z0-9][a-z0-9._-]*$/i.test(s) && !s.includes('/') && !/\s/.test(s);
     let emitId = (md && md.id) || id;
     if (!clean(emitId)) {
       const base = String(emitId || '').split('/').pop();
-      emitId = variants.find((v) => clean(v) && (v.toLowerCase() === base.toLowerCase() || dashNorm(v) === dashNorm(base)))
-        || variants.find((v) => clean(v))
-        || dashNorm(md && md.id || id);
+      emitId = allVariants.find((v) => clean(v) && (v.toLowerCase() === base.toLowerCase() || dashNorm(v) === dashNorm(base)))
+        || allVariants.find((v) => clean(v))
+        || d;
     }
     emitId = String(emitId).toLowerCase();
     const cost = md ? md.cost.output : null;
     const label = (md && md.name) || (aaRec && aaRec.shortName) || id;
+    // if we have a fuzzy match but no md, still use aaRec; if we have md but aaRec from fuzzy, promote to plotted if possible
+    const canPlot = md && aaRec && typeof cost === 'number' && cost > 0 && typeof aaRec.intelligenceIndex === 'number' && aaRec.intelligenceIndex > 0;
+    if (canPlot) {
+      out.push({
+        id: emitId,
+        label: aaRec.shortName || label,
+        author: aaRec.creator || null,
+        ocCostPerM: cost,
+        ocCost: md.cost,
+        intelligenceIndex: aaRec.intelligenceIndex,
+        aa: { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url },
+        contextWindowTokens: md && md.limit && md.limit.context || null,
+        reasoning: md ? !!md.reasoning : false,
+        openWeights: md && md.openWeights != null ? md.openWeights : (aaRec ? !!aaRec.isOpenWeights : false),
+        plot: true,
+        excludeReason: null,
+        hue: aaRec.creatorColor || hueFor(aaRec.creator),
+        weeklyTokensT: null,
+        rank: null,
+      });
+      seen.add(emitId); seen.add(normSlug(emitId)); seen.add(dashNorm(emitId));
+      seen.add(aaRec.slug); seen.add(dashNorm(aaRec.slug)); seen.add(normSlug(aaRec.slug));
+      continue;
+    }
     out.push({
       id: emitId,
       label,
@@ -390,7 +659,7 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
       openWeights: md && md.openWeights != null ? md.openWeights : (aaRec ? !!aaRec.isOpenWeights : false),
       plot: false,
       excludeReason: !md ? 'Missing pricing' : 'Not scored on the Artificial Analysis Intelligence Index yet.',
-      hue: hueFor(null),
+      hue: hueFor(aaRec ? aaRec.creator : null),
       weeklyTokensT: null,
       rank: null,
     });
@@ -477,16 +746,28 @@ export default {
       // tier 2: keyless index page scores (flight records + JSON-LD) for slugs the keyed API omitted
       mergeAaScores(aaMap, extractAaIndexScores(aaIndexHtml));
 
+      // build full AA slug set for fetch candidate resolution (all slugs, even unscored)
+      const flight = extractFlight(aaIndexHtml);
+      const allAaSlugs = extractAllAaSlugs(flight);
+      for (const s of scanJsonLdScores(aaIndexHtml).keys()) allAaSlugs.add(s);
+      for (const s of aaMap.keys()) allAaSlugs.add(s);
+
       // tier 3: per-model pages for curated roster models still missing a score (bounded, fail-soft)
       if (curatedIds && curatedIds.size) {
         const need = [];
         const seenSlugs = new Set();
+        const needOcMap = new Map(); // slug -> ocId for later mapping
         for (const id of curatedIds) {
-          const slug = AA_SLUG[id] || dashNorm(id);
-          if (!slug || seenSlugs.has(slug) || aaMap.has(slug)) continue;
-          seenSlugs.add(slug);
-          need.push(slug);
-          if (need.length >= 15) break;
+          // try to resolve to best existing scored slug first
+          if (resolveAaSlugForOc(id, aaMap)) continue;
+          const fetchSlug = bestFetchSlugForOc(id, allAaSlugs);
+          if (!fetchSlug || seenSlugs.has(fetchSlug)) continue;
+          // if we already have score for fetchSlug, skip
+          if (aaMap.has(fetchSlug) || aaMap.has(dashNorm(fetchSlug)) || aaMap.has(normSlug(fetchSlug))) continue;
+          seenSlugs.add(fetchSlug);
+          need.push(fetchSlug);
+          needOcMap.set(fetchSlug, id);
+          if (need.length >= 20) break;
         }
         if (need.length) {
           const pages = await Promise.all(need.map((s) =>
@@ -494,8 +775,22 @@ export default {
               .then((r) => (r.ok ? r.text() : '')).catch(() => ''),
           ));
           for (let i = 0; i < need.length; i++) {
-            const rec = extractAaModelPageRecord(pages[i], need[i]);
-            if (rec) aaMap.set(need[i], rec);
+            const slug = need[i];
+            let rec = extractAaModelPageRecord(pages[i], slug);
+            if (!rec) {
+              // try to parse any record from the page (fallback when flight structure differs)
+              const alt = scanAaFlightRecords(extractFlight(pages[i]));
+              if (alt.size === 1) rec = [...alt.values()][0];
+              else if (alt.has(slug)) rec = alt.get(slug);
+            }
+            if (rec) {
+              aaMap.set(slug, rec);
+              // also map back to OC dash for resolver convenience: ensure dash lookup finds it
+              // no need to alias, resolver will handle
+            } else {
+              // if fetchSlug was a prefix expansion (e.g., qwen3-8-flash-next) but OC is qwen3-8-flash,
+              // the fetched record's slug IS the fetchSlug; resolver will map OC->fetchSlug on join
+            }
           }
         }
       }
@@ -545,4 +840,13 @@ export const __TEST__ = {
   parseModelsDev,
   extractCuratedIdsFromHtml,
   dashNorm,
+  extractAllAaSlugs,
+  extractFlight,
+  scanAaFlightRecords,
+  resolveAaSlugForOc,
+  resolveAaRecordForOc,
+  resolveMdForAa,
+  bestFetchSlugForOc,
+  aaRecordFromObj,
+  __AA_SLUG: AA_SLUG,
 };
