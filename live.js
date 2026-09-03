@@ -9,8 +9,17 @@ window.LiveData = (function () {
 
   const DEFAULT_WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
   const WORKER_URL = (typeof window !== 'undefined' && window.MVM_WORKER_URL) || DEFAULT_WORKER_URL;
-  const CACHE_KEY = 'mvm.live.v1';
-  const CACHE_LASTGOOD = 'mvm.live.lastgood';
+  // Cache keys are namespaced per endpoint — the main and free pages must
+  // never read each other's roster. The root endpoint keeps the historic
+  // keys so existing caches stay valid.
+  function endpointTag(url) {
+    const m = String(url || '').match(/\/([a-z0-9-]+)\/?(?:[?#]|$)/i);
+    const seg = m ? m[1].toLowerCase() : '';
+    return (seg && seg !== 'api' && seg !== 'v1') ? seg + '.' : '';
+  }
+  const CACHE_TAG = endpointTag(WORKER_URL);
+  const CACHE_KEY = 'mvm.live.' + CACHE_TAG + 'v1';
+  const CACHE_LASTGOOD = CACHE_TAG ? 'mvm.live.' + CACHE_TAG + 'lastgood' : 'mvm.live.lastgood';
   const TTL_MS = 30 * 60 * 1000;
 
   async function fetchWorker() {
