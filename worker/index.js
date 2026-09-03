@@ -20,6 +20,22 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Cache API entries have no built-in TTL, so bound staleness here to match
+// the documented CDN s-maxage window (plus slack) — never serve a payload
+// older than this, regardless of edge eviction behavior.
+const MAX_CACHE_AGE_MS = 10 * 60 * 1000;
+
+async function matchFresh(cache, cacheKey) {
+  try {
+    const hit = await cache.match(cacheKey);
+    if (!hit) return null;
+    const t = await hit.clone().json().then((j) => (j && j.t) || 0).catch(() => 0);
+    const age = Date.now() - t;
+    if (Number.isFinite(age) && age >= 0 && age < MAX_CACHE_AGE_MS) return hit;
+    return null;
+  } catch (_) { return null; }
+}
+
 // The Go docs table is the roster — every model listed there must appear on the page.
 const CURATED_DOCS = ['https://opencode.ai/docs/go'];
 
@@ -330,6 +346,26 @@ function resolveAaRecordForOc(ocId, aaMap) {
   return slug ? aaMap.get(slug) : null;
 }
 
+// Exact = curator override or literal slug hit. Anything resolved through the
+// stripped-suffix / prefix-expansion fuzzy tiers is a *different* AA model
+// (glm-5.2 → glm-5, inkling-small → inkling) — usable as a closest-match
+// signal, but must never be presented as the model's own score.
+function resolveAaMatchForOc(ocId, aaMap) {
+  if (!ocId || !aaMap) return null;
+  const d = dashNorm(ocId);
+  const over = AA_SLUG[ocId] || AA_SLUG[d] || AA_SLUG[normSlug(ocId)] || null;
+  if (over) {
+    const hit = aaLookupNorm(over, aaMap);
+    if (hit) return { rec: hit, match: 'exact' };
+  }
+  if (aaMap.has(d)) return { rec: aaMap.get(d), match: 'exact' };
+  if (aaMap.has(ocId)) return { rec: aaMap.get(ocId), match: 'exact' };
+  const slug = resolveAaSlugForOc(ocId, aaMap);
+  if (!slug) return null;
+  const rec = aaMap.get(slug);
+  return rec ? { rec, match: 'approximate' } : null;
+}
+
 function mdLookupForAa(aaSlug, mdMap) {
   if (!aaSlug || !mdMap) return null;
   if (mdMap.has(aaSlug)) return mdMap.get(aaSlug);
@@ -563,6 +599,15 @@ function parseOpenRouter(data) {
   return { list, map };
 }
 
+// 'Z.ai: GLM 5.2 (free)' → 'GLM 5.2' — the name users recognize from OpenRouter.
+function orDisplayName(e) {
+  let n = (e && typeof e.name === 'string') ? e.name.trim() : '';
+  const ci = n.indexOf(':');
+  if (ci > 0 && ci <= 24) n = n.slice(ci + 1).trim();
+  n = n.replace(/\s*\(free\)\s*$/i, '').trim();
+  return n || ((e && e.id) ? String(e.id) : '');
+}
+
 // Join free OpenRouter models with AA intelligence (same sanitized shape as
 // buildModels). Cost is always $0/1M, which a log scale cannot show, so every
 // entry is plot:false — scored models land in the "Off the map" tray with an
@@ -573,17 +618,25 @@ function buildOpenRouterFreeModels(orList, aaMap) {
   for (const e of arr) {
     if (!e || !e.id) continue;
     const base = String(e.id).toLowerCase();
-    const aaRec = (resolveAaRecordForOc(base, aaMap) || aaLookupNorm(base, aaMap)) || null;
+    const found = resolveAaMatchForOc(base, aaMap);
+    const aaRec = found ? found.rec : null;
+    const match = found ? found.match : null;
     const hasScore = !!(aaRec && typeof aaRec.intelligenceIndex === 'number' && Number.isFinite(aaRec.intelligenceIndex) && aaRec.intelligenceIndex > 0);
     const author = (aaRec && aaRec.creator) || e.author || null;
+    // Exact: the benchmark's canonical name. Approximate: the OpenRouter
+    // name, so the bar is recognizable as the model the user looked for.
+    const label = !hasScore ? (e.name || base)
+      : match === 'exact' ? (aaRec.shortName || orDisplayName(e) || base)
+      : (orDisplayName(e) || aaRec.shortName || base);
     out.push({
       id: base,
-      label: (aaRec && aaRec.shortName) || e.name || base,
+      label,
       author,
+      orId: e.orId || null,
       ocCostPerM: 0,
       ocCost: e.cost || { input: 0, output: 0, cacheRead: null, cacheWrite: null },
       intelligenceIndex: hasScore ? aaRec.intelligenceIndex : null,
-      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url } : null,
+      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url, match } : null,
       contextWindowTokens: (e.limit && e.limit.context) || null,
       reasoning: !!e.reasoning,
       openWeights: e.openWeights != null ? e.openWeights : (aaRec ? !!aaRec.isOpenWeights : null),
@@ -813,7 +866,7 @@ export default {
       try {
         const cache = caches.default;
         const cacheKey = new Request(url.origin + '/__curated_cache', request);
-        const cached = await cache.match(cacheKey);
+        const cached = await matchFresh(cache, cacheKey);
         if (cached) return cached;
         const ids = await fetchCuratedIds();
         const payload = { t: Date.now(), ids: [...ids] };
@@ -834,7 +887,7 @@ export default {
       try {
         const cache = caches.default;
         const cacheKey = new Request(url.origin + '/__openrouter_cache', request);
-        const cached = await cache.match(cacheKey);
+        const cached = await matchFresh(cache, cacheKey);
         if (cached) return cached;
         const [orRes, aaPages, aaIndexHtml] = await Promise.all([
           fetch('https://openrouter.ai/api/v1/models', { headers: { 'Accept': 'application/json' }, cf: { cacheTtl: 300 } }),
@@ -858,7 +911,10 @@ export default {
           const need = [];
           const seenSlugs = new Set();
           for (const e of orList) {
-            if (resolveAaSlugForOc(e.id, aaMap)) continue;
+            // Exact matches are done; approximate ones still try for a
+            // dedicated model page that would upgrade them to exact.
+            const matched = resolveAaMatchForOc(e.id, aaMap);
+            if (matched && matched.match === 'exact') continue;
             const fetchSlug = bestFetchSlugForOc(e.id, allAaSlugs);
             if (!fetchSlug || seenSlugs.has(fetchSlug)) continue;
             if (aaMap.has(fetchSlug) || aaMap.has(dashNorm(fetchSlug)) || aaMap.has(normSlug(fetchSlug))) continue;
@@ -913,8 +969,8 @@ export default {
     try {
       const cache = caches.default;
       const cacheKey = new Request(url.origin + '/__worker_cache', request);
-      let cached = await cache.match(cacheKey);
-      // Optionally serve stale while revalidating via Cache API — keep simple: respect CDN s-maxage via headers
+      const cached = await matchFresh(cache, cacheKey);
+      if (cached) return cached;
       // Fetch fresh in parallel; docs roster + keyless AA pages are best-effort (empty on failure)
       const [ocRes, aaPages, curatedIds, aaIndexHtml] = await Promise.all([
         fetch('https://models.dev/api.json', { headers: { 'Accept': 'application/json' }, cf: { cacheTtl: 300 } }),
@@ -1039,5 +1095,7 @@ export const __TEST__ = {
   parseOpenRouter,
   buildOpenRouterFreeModels,
   orBaseId,
+  orDisplayName,
+  resolveAaMatchForOc,
   __AA_SLUG: AA_SLUG,
 };

@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __TEST__ } from '../worker/index.js';
 
-const { parseOpenRouter, buildOpenRouterFreeModels, orBaseId } = __TEST__;
+const { parseOpenRouter, buildOpenRouterFreeModels, orBaseId, orDisplayName, resolveAaMatchForOc } = __TEST__;
 
 function orModel(over = {}) {
   return {
@@ -111,4 +111,60 @@ test('buildOpenRouterFreeModels sorts scored-first by intelligence', () => {
     ['glm-5-2', aaRec({ slug: 'glm-5-2', shortName: 'GLM 5.2', intelligenceIndex: 55 })],
   ]));
   assert.deepEqual(models.map((m) => m.id), ['glm-5.2', 'minimax-m3', 'unscored']);
+});
+
+test('resolveAaMatchForOc marks override and literal hits exact', () => {
+  const aaMap = new Map([
+    ['minimax-m3', aaRec({ slug: 'minimax-m3' })],
+    ['glm-5-2', aaRec({ slug: 'glm-5-2' })],
+  ]);
+  assert.equal(resolveAaMatchForOc('minimax-m3', aaMap).match, 'exact');
+  // curator override glm-5.2 → glm-5-2 resolves exact while the slug exists
+  assert.equal(resolveAaMatchForOc('glm-5.2', aaMap).match, 'exact');
+  assert.equal(resolveAaMatchForOc('glm-5.2', aaMap).rec.slug, 'glm-5-2');
+});
+
+test('resolveAaMatchForOc marks stripped/prefix fallbacks approximate', () => {
+  const aaMap = new Map([
+    ['glm-5', aaRec({ slug: 'glm-5', shortName: 'GLM-5' })],
+    ['inkling', aaRec({ slug: 'inkling', shortName: 'Inkling' })],
+  ]);
+  // no glm-5-2 in the map → falls back to glm-5, a different model
+  const glm = resolveAaMatchForOc('glm-5.2', aaMap);
+  assert.equal(glm.match, 'approximate');
+  assert.equal(glm.rec.slug, 'glm-5');
+  const ink = resolveAaMatchForOc('inkling-small', aaMap);
+  assert.equal(ink.match, 'approximate');
+  assert.equal(ink.rec.slug, 'inkling');
+  assert.equal(resolveAaMatchForOc('no-such-model', aaMap), null);
+});
+
+test('orDisplayName strips the provider prefix and free suffix', () => {
+  assert.equal(orDisplayName({ id: 'z-ai/glm-5.2:free', name: 'Z.ai: GLM 5.2 (free)' }), 'GLM 5.2');
+  assert.equal(orDisplayName({ id: 'a/b:free', name: 'Thinking Machines: Inkling Small (free)' }), 'Inkling Small');
+  assert.equal(orDisplayName({ id: 'x/y', name: 'Ling 3.0 Flash Fin (free)' }), 'Ling 3.0 Flash Fin');
+  assert.equal(orDisplayName({ id: 'openrouter/free', name: 'Free Models Router' }), 'Free Models Router');
+});
+
+test('approximate matches keep the OpenRouter name so the bar is recognizable', () => {
+  const { list } = parseOpenRouter({ data: [
+    orModel({ id: 'z-ai/glm-5.2:free', name: 'Z.ai: GLM 5.2 (free)' }),
+  ] });
+  const models = buildOpenRouterFreeModels(list, new Map([
+    ['glm-5', aaRec({ slug: 'glm-5', shortName: 'GLM-5 (Reasoning)', intelligenceIndex: 40.6 })],
+  ]));
+  assert.equal(models.length, 1);
+  assert.equal(models[0].label, 'GLM 5.2');
+  assert.equal(models[0].orId, 'z-ai/glm-5.2:free');
+  assert.equal(models[0].aa.match, 'approximate');
+  assert.equal(models[0].aa.slug, 'glm-5');
+  assert.equal(models[0].plot, false);
+});
+
+test('exact matches keep the benchmark canonical name and orId', () => {
+  const { list } = parseOpenRouter({ data: [orModel()] });
+  const models = buildOpenRouterFreeModels(list, new Map([['minimax-m3', aaRec()]]));
+  assert.equal(models[0].label, 'MiniMax M3');
+  assert.equal(models[0].aa.match, 'exact');
+  assert.equal(models[0].orId, 'minimax/minimax-m3:free');
 });

@@ -89,6 +89,9 @@ prompt + $0 completion (`openrouter.ai/api/v1/models`), scored by the same AA
 pipeline. With no price differences to plot, the page renders a descending
 intelligence bar chart (`window.MVM_BAR_CHART`) instead of the cost scatter —
 scored models chart smartest-first, unscored ones stay listed in the tray.
+Scores are `exact` when Artificial Analysis benchmarks that precise model;
+otherwise the bar carries the closest AA match, marked `≈` with an explicit
+note (and the worker still tries the model's own AA page to upgrade it).
 
 ## License
 

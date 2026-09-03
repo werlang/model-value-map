@@ -173,3 +173,42 @@ test('bar boot produces no console errors', async () => {
   const env = await bootFree();
   assert.equal(env.sb.consoleCalls.error.length, 0);
 });
+
+function approxModel() {
+  return freeModel({
+    id: 'glm-5.2',
+    label: 'GLM 5.2',
+    author: 'Z AI',
+    orId: 'z-ai/glm-5.2:free',
+    aa: { name: 'GLM-5 (Reasoning)', slug: 'glm-5', intelligenceIndex: 40.6, effort: null, url: 'https://artificialanalysis.ai/models/glm-5', match: 'approximate' },
+  });
+}
+
+async function bootApprox() {
+  const env = standardEnv({ loadApp: true, snapshot: [scored('top-model', 'Top Model', 45.4, 'Alpha'), approxModel(), unscored('new-thing', 'New Thing')], workerFail: true, ...FREE_FLAGS });
+  await env.sb.settle();
+  return env;
+}
+
+test('approximate bars show ≈ and name the closest match', async () => {
+  const env = await bootApprox();
+  const bar = [...env.sb.el('chart-holder').querySelectorAll('.bar-row')].find((b) => b.dataset.id === 'glm-5.2');
+  assert.ok(bar, 'approximate model still charted');
+  assert.equal(bar.querySelector('.bar-value').textContent, '≈40.6');
+  assert.equal(bar.getAttribute('aria-label'),
+    '2. GLM 5.2, intelligence approximately 40.6 out of 100 (closest Artificial Analysis match), free on OpenRouter as z-ai/glm-5.2:free.');
+  // exact bar keeps the plain rendering
+  const top = [...env.sb.el('chart-holder').querySelectorAll('.bar-row')].find((b) => b.dataset.id === 'top-model');
+  assert.equal(top.querySelector('.bar-value').textContent, '45.4');
+});
+
+test('approximate readout carries the OpenRouter id and closest-match note', async () => {
+  const env = await bootApprox();
+  const bar = [...env.sb.el('chart-holder').querySelectorAll('.bar-row')].find((b) => b.dataset.id === 'glm-5.2');
+  bar.dispatch('pointerenter');
+  const html = env.sb.el('readout').innerHTML;
+  assert.match(html, /GLM 5\.2/);
+  assert.match(html, /≈40\.6/);
+  assert.ok(html.includes('z-ai/glm-5.2:free'));
+  assert.match(html, /Closest Artificial Analysis match: GLM-5 \(Reasoning\) — approximate/);
+});

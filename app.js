@@ -630,12 +630,15 @@
 
     rows.forEach((m, i) => {
       const s = scoreOf(m);
+      const approx = !!(m.aa && m.aa.match === 'approximate');
       const yTop = TOP + i * RH;
       const cy = yTop + RH / 2;
       const g = el('g', 'bar-row');
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'img');
-      g.setAttribute('aria-label', `${i + 1}. ${m.label}, intelligence ${s} out of 100, free on OpenRouter.`);
+      g.setAttribute('aria-label',
+        `${i + 1}. ${m.label}, intelligence ${approx ? 'approximately ' : ''}${s} out of 100` +
+        `${approx ? ' (closest Artificial Analysis match)' : ''}, free on OpenRouter${m.orId ? ' as ' + m.orId : ''}.`);
       g.dataset.id = m.id;
 
       const track = el('rect', 'bar-track');
@@ -649,7 +652,7 @@
       fill.setAttribute('fill', m.hue || '#3B5BDB');
       g.append(track, fill);
       txt(g, x0 - 8, cy + 4, `${i + 1}. ${trunc(m.label)}`, 'bar-label', 'end');
-      txt(g, x(s) + 6, cy + 4, String(s), 'bar-value', 'start');
+      txt(g, x(s) + 6, cy + 4, (approx ? '≈' : '') + String(s), 'bar-value', 'start');
       gBars.appendChild(g);
 
       g.addEventListener('pointerenter', () => { setBarActive(m.id, g, true); });
@@ -700,13 +703,15 @@
         <div class="readout-badges">${badges.join('')}</div>
         <dl class="readout-grid">
           <div><dt>Cost / 1M</dt><dd>${costCell}</dd></div>
-          <div><dt>Intelligence</dt><dd>${model.aa.intelligenceIndex} / 100</dd></div>
+          <div><dt>Intelligence</dt><dd>${(BAR_MODE && model.aa && model.aa.match === 'approximate' ? '≈' : '') + model.aa.intelligenceIndex} / 100</dd></div>
+          ${(BAR_MODE && model.orId) ? `<div><dt>OpenRouter</dt><dd>${esc(model.orId)}</dd></div>` : ''}
           <div><dt>Input rate</dt><dd>${c.input != null ? fmt$(c.input) : '—'} <small>/1M</small></dd></div>
           <div><dt>Cached</dt><dd>${c.cached != null ? fmt$(c.cached) : '—'} <small>/1M</small></dd></div>
           <div><dt>Context</dt><dd>${fmtCtx(model.contextWindowTokens)}</dd></div>
           ${model.weeklyTokensT ? `<div><dt>Tokens this month</dt><dd>${model.weeklyTokensT >= 1 ? model.weeklyTokensT.toFixed(1) + 'T' : Math.round(model.weeklyTokensT * 1000) + 'B'}</dd></div>` : ''}
         </dl>
         ${model.aa.effort ? `<p class="hint">AA variant: ${esc(model.aa.name)} (${esc(model.aa.effort)} effort)</p>` : ''}
+        ${(BAR_MODE && model.aa.match === 'approximate') ? `<p class="hint">Closest Artificial Analysis match: ${esc(model.aa.name)} — approximate; ${esc(model.label)} itself isn't benchmarked yet.</p>` : ''}
         <p class="readout-links">
           <a href="${(model.aa && model.aa.url) || ('https://artificialanalysis.ai/models/' + encodeURIComponent(model.id))}" target="_blank" rel="noopener">Artificial Analysis ↗</a>
           ${BAR_MODE
@@ -734,7 +739,7 @@
           ${frontier.map((f, i) => `<li>
             <span class="chip-dot" style="--chip-c:${f.hue}"></span>
             <span class="m-name">${i + 1}. ${esc(f.label)}</span>
-            <span class="m-vals">${scoreOf(f)}</span>
+            <span class="m-vals">${(f.aa && f.aa.match === 'approximate' ? '≈' : '') + scoreOf(f)}</span>
           </li>`).join('')}
         </ul>
         <p class="hint">Ranked over the ${frontier.length} scored model${frontier.length === 1 ? '' : 's'} currently toggled on${awaiting ? ` · ${awaiting} more free without a score ${awaiting === 1 ? 'is' : 'are'} listed below` : ''}.</p>`;
@@ -994,7 +999,7 @@
     if (!tbody) return;
     if (BAR_MODE) {
       tbody.innerHTML = `
-        ${barScoredAll().map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}
+        ${barScoredAll().map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${(m.aa && m.aa.match === 'approximate' ? '~' : '') + (m.aa ? m.aa.intelligenceIndex : 'n/a')}</td></tr>`).join('')}
         ${barUnscored().map((m) => `<tr><td>${esc(m.label)} (awaiting score)</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
       return;
     }
