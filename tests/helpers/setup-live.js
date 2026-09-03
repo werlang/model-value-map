@@ -176,6 +176,7 @@ export function standardEnv(over = {}) {
       '{name:"models.dev",url:"https://models.dev/api.json"},' +
       '{name:"artificialanalysis.ai/models",url:"https://artificialanalysis.ai/models"}' +
       ']},models:' + JSON.stringify(snapshot) + '};',
+    prelude: over.prelude,
     fetchImpl: fetch,
     storage: over.storage,
     loadApp: !!over.loadApp,

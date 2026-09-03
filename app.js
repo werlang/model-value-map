@@ -1,13 +1,18 @@
 /* Model Value Map — vanilla JS, no dependencies.
-   Renders a responsive SVG scatter (log cost × linear intelligence),
-   computes the Pareto frontier over currently visible models,
-   and wires toggles + crosshair readout. */
+   Scatter mode: responsive SVG scatter (log cost × linear intelligence),
+   Pareto frontier over visible models, toggles + crosshair readout.
+   Bar mode (window.MVM_BAR_CHART): horizontal bars, descending
+   intelligence — for free rosters where a cost axis is meaningless. */
 (function () {
   'use strict';
 
   const SNAPSHOT = window.DASHBOARD_DATA || null;
   let MODELS = (SNAPSHOT && SNAPSHOT.models) || [];
-  const STORE_KEY = 'mvm.hidden.v1';
+  // Free-roster pages (e.g. /openrouter/) set window.MVM_BAR_CHART for a
+  // descending intelligence bar chart instead of the cost × intelligence
+  // scatter — a scatter is meaningless when every model costs $0.
+  const BAR_MODE = (typeof window !== 'undefined' && window.MVM_BAR_CHART) ? true : false;
+  const STORE_KEY = BAR_MODE ? 'mvm.hidden.free.v1' : 'mvm.hidden.v1';
 
   // ---------- curated filter (Go table) ----------
   // The Go docs table is the roster: every model listed there must show.
@@ -52,6 +57,27 @@
     excluded = avail.filter((m) => !m.plot);
     const tokenCounts = plotted.map((m) => m.weeklyTokensT).filter((t) => typeof t === 'number' && Number.isFinite(t) && t > 0);
     tMax = tokenCounts.length ? Math.max(1, ...tokenCounts) : 1;
+  }
+
+  // ---------- bar-chart dataset (free-roster pages) ----------
+  function scoreOf(m) {
+    return (m.aa && typeof m.aa.intelligenceIndex === 'number' && Number.isFinite(m.aa.intelligenceIndex))
+      ? m.aa.intelligenceIndex : null;
+  }
+  // Scored, visible, smartest first — the bars.
+  function barRows() {
+    return availableModels()
+      .filter((m) => scoreOf(m) != null && !hidden.has(m.id))
+      .sort((a, b) => (scoreOf(b) - scoreOf(a)) || String(a.label || '').localeCompare(String(b.label || '')));
+  }
+  // Scored regardless of toggles (ranking order) + unscored (tray order).
+  function barScoredAll() {
+    return availableModels()
+      .filter((m) => scoreOf(m) != null)
+      .sort((a, b) => (scoreOf(b) - scoreOf(a)) || String(a.label || '').localeCompare(String(b.label || '')));
+  }
+  function barUnscored() {
+    return availableModels().filter((m) => scoreOf(m) == null);
   }
 
   function extractCuratedIds(html) {
@@ -309,6 +335,7 @@
       syncChips();
       return;
     }
+    if (BAR_MODE) { renderBars(); return; }
     const w = Math.max(260, Math.round(holder.clientWidth) || 320);
     const h = holder.clientHeight > 100 ? holder.clientHeight : Math.round(Math.min(680, Math.max(380, w * 0.56)));
     const { xd, yd, xt, yt } = computeDomains();
@@ -540,23 +567,139 @@
     }
   }
 
+  // ---------- bar chart (free-roster pages) ----------
+  // One horizontal bar per scored model, smartest first. Unscored models
+  // have no bar — they stay visible in the tray via renderExcluded.
+  function renderBars() {
+    const w = Math.max(260, Math.round(holder.clientWidth) || 320);
+    const rows = barRows();
+    const NS = 'http://www.w3.org/2000/svg';
+    const RH = 30, TOP = 14, BOTTOM = 30;
+    const labelW = Math.round(Math.min(230, Math.max(120, w * 0.34)));
+    const valW = 48;
+    const x0 = labelW + 10;
+    const maxScore = rows.length ? Math.max.apply(null, rows.map(scoreOf)) : 100;
+    const xMax = Math.max(10, Math.ceil(maxScore / 10) * 10);
+    const h = TOP + rows.length * RH + BOTTOM;
+    const x = (v) => x0 + (v / xMax) * (w - x0 - valW - 8);
+    const maxChars = labelW >= 200 ? 30 : labelW >= 150 ? 20 : 14;
+    const trunc = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + '…' : s);
+
+    svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.setAttribute('width', w);
+    svg.setAttribute('height', h);
+    svg.setAttribute('class', 'chart-svg');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label',
+      `Bar chart of ${rows.length} free models ranked by Artificial Analysis Intelligence Index, highest first.`);
+
+    function el(name, cls) {
+      const n = document.createElementNS(NS, name);
+      if (cls) n.setAttribute('class', cls);
+      return n;
+    }
+    function txt(parent, tx, ty, str, cls, anchor) {
+      const t = el('text', cls);
+      t.setAttribute('x', tx); t.setAttribute('y', ty);
+      if (anchor) t.setAttribute('text-anchor', anchor);
+      t.textContent = str;
+      parent.appendChild(t); return t;
+    }
+
+    const gGrid = el('g'); const gAxes = el('g'); const gBars = el('g', 'layer-dots');
+    svg.append(gGrid, gAxes, gBars);
+    cur = { bar: true };
+
+    // gridlines + linear intelligence axis (xMax ≥ every score by
+    // construction, so value labels always fit right of their bar)
+    const ticks = [0, xMax / 2, xMax];
+    for (const tv of ticks) {
+      const gx = x(tv);
+      const gl = el('line', 'grid-minor');
+      gl.setAttribute('x1', gx); gl.setAttribute('y1', TOP - 4);
+      gl.setAttribute('x2', gx); gl.setAttribute('y2', TOP + rows.length * RH);
+      gGrid.appendChild(gl);
+      txt(gAxes, gx, TOP + rows.length * RH + 18, String(tv), 'tick-label', 'middle');
+    }
+    const frame = el('line', 'grid-major');
+    frame.setAttribute('x1', x0); frame.setAttribute('y1', TOP + rows.length * RH);
+    frame.setAttribute('x2', w - 8); frame.setAttribute('y2', TOP + rows.length * RH);
+    gAxes.appendChild(frame);
+    txt(gAxes, x0 + (w - 8 - x0) / 2, h - 4, 'INTELLIGENCE INDEX (ARTIFICIAL ANALYSIS)', 'axis-title-x', 'middle');
+
+    rows.forEach((m, i) => {
+      const s = scoreOf(m);
+      const yTop = TOP + i * RH;
+      const cy = yTop + RH / 2;
+      const g = el('g', 'bar-row');
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('role', 'img');
+      g.setAttribute('aria-label', `${i + 1}. ${m.label}, intelligence ${s} out of 100, free on OpenRouter.`);
+      g.dataset.id = m.id;
+
+      const track = el('rect', 'bar-track');
+      track.setAttribute('x', x0); track.setAttribute('y', yTop + 5);
+      track.setAttribute('width', Math.max(1, x(xMax) - x0)); track.setAttribute('height', RH - 10);
+      track.setAttribute('rx', 3);
+      const fill = el('rect', 'bar-fill');
+      fill.setAttribute('x', x0); fill.setAttribute('y', yTop + 5);
+      fill.setAttribute('width', Math.max(2, x(s) - x0)); fill.setAttribute('height', RH - 10);
+      fill.setAttribute('rx', 3);
+      fill.setAttribute('fill', m.hue || '#3B5BDB');
+      g.append(track, fill);
+      txt(g, x0 - 8, cy + 4, `${i + 1}. ${trunc(m.label)}`, 'bar-label', 'end');
+      txt(g, x(s) + 6, cy + 4, String(s), 'bar-value', 'start');
+      gBars.appendChild(g);
+
+      g.addEventListener('pointerenter', () => { setBarActive(m.id, g, true); });
+      g.addEventListener('pointerleave', () => { setBarActive(null, g, false); });
+      g.addEventListener('click', (e) => { e.stopPropagation(); setBarActive(m.id, g, true); });
+      g.addEventListener('focus', () => { setBarActive(m.id, g, true); });
+      g.addEventListener('blur', () => { setBarActive(null, g, false); });
+    });
+
+    svg.addEventListener('click', () => { setBarActive(null, null, false); });
+    holder.replaceChildren(svg);
+    if (chartLoadingEl) holder.appendChild(chartLoadingEl);
+    renderReadout(activeId ? MODELS.find((mm) => mm.id === activeId) : null, rows);
+    renderCount(rows.length, rows.length);
+    syncChips();
+  }
+
+  function setBarActive(id, g, on) {
+    if (!svg) return;
+    svg.querySelectorAll('.bar-row.is-active').forEach((n) => n.classList.remove('is-active'));
+    if (on && id) {
+      if (g) g.classList.add('is-active');
+      activeId = id;
+      renderReadout(MODELS.find((mm) => mm.id === id) || null, barRows());
+    } else if (!on && g) {
+      g.classList.remove('is-active');
+    }
+  }
+
   // ---------- readout ----------
   function renderReadout(model, frontier) {
     if (model) {
       const c = model.ocCost || {};
-      const onF = frontier.some((f) => f.id === model.id);
+      const onF = !BAR_MODE && frontier.some((f) => f.id === model.id);
       const badges = [];
       if (model.rank) badges.push(`<span class="badge">rank #${model.rank}</span>`);
       if (onF) badges.push('<span class="badge on-frontier">on frontier</span>');
+      if (BAR_MODE) badges.push('<span class="badge on-frontier">free</span>');
       if (model.openWeights != null) badges.push(`<span class="badge">${model.openWeights ? 'open weights' : 'proprietary'}</span>`);
       if (model.reasoning != null) badges.push(`<span class="badge">${model.reasoning ? 'reasoning' : 'non-reasoning'}</span>`);
+      const costCell = (BAR_MODE && model.ocCostPerM === 0)
+        ? 'Free <small>(OpenRouter)</small>'
+        : `${fmt$(model.ocCostPerM)} <small>(out)</small>`;
 
       readoutEl.innerHTML = `
         <h2 class="readout-model-title"><span class="chip-dot" style="--chip-c:${model.hue};width:11px;height:11px"></span>${esc(model.label)}</h2>
         <p class="readout-author">${esc(model.author)}${model.rank ? ` · leaderboard #${model.rank}` : ''}</p>
         <div class="readout-badges">${badges.join('')}</div>
         <dl class="readout-grid">
-          <div><dt>Cost / 1M</dt><dd>${fmt$(model.ocCostPerM)} <small>(out)</small></dd></div>
+          <div><dt>Cost / 1M</dt><dd>${costCell}</dd></div>
           <div><dt>Intelligence</dt><dd>${model.aa.intelligenceIndex} / 100</dd></div>
           <div><dt>Input rate</dt><dd>${c.input != null ? fmt$(c.input) : '—'} <small>/1M</small></dd></div>
           <div><dt>Cached</dt><dd>${c.cached != null ? fmt$(c.cached) : '—'} <small>/1M</small></dd></div>
@@ -566,7 +709,9 @@
         ${model.aa.effort ? `<p class="hint">AA variant: ${esc(model.aa.name)} (${esc(model.aa.effort)} effort)</p>` : ''}
         <p class="readout-links">
           <a href="${(model.aa && model.aa.url) || ('https://artificialanalysis.ai/models/' + encodeURIComponent(model.id))}" target="_blank" rel="noopener">Artificial Analysis ↗</a>
-          <a href="https://models.dev" target="_blank" rel="noopener">models.dev ↗</a>
+          ${BAR_MODE
+            ? '<a href="https://openrouter.ai/models" target="_blank" rel="noopener">OpenRouter ↗</a>'
+            : '<a href="https://models.dev" target="_blank" rel="noopener">models.dev ↗</a>'}
         </p>`;
       return;
     }
@@ -574,7 +719,25 @@
     if (!frontier.length) {
       readoutEl.innerHTML = `
         <h2 class="readout-empty-title">No models selected</h2>
-        <p class="readout-lede">Toggle models back on below and the frontier redraws itself.</p>`;
+        <p class="readout-lede">${BAR_MODE
+          ? 'Toggle models back on below and the ranking redraws itself.'
+          : 'Toggle models back on below and the frontier redraws itself.'}</p>`;
+      return;
+    }
+
+    if (BAR_MODE) {
+      const awaiting = barUnscored().length;
+      readoutEl.innerHTML = `
+        <h2 class="readout-empty-title">Free models, smartest first</h2>
+        <p class="readout-lede">Hover any bar for detail. Every model here costs $0 on OpenRouter, ranked by intelligence.</p>
+        <ul class="readout-members">
+          ${frontier.map((f, i) => `<li>
+            <span class="chip-dot" style="--chip-c:${f.hue}"></span>
+            <span class="m-name">${i + 1}. ${esc(f.label)}</span>
+            <span class="m-vals">${scoreOf(f)}</span>
+          </li>`).join('')}
+        </ul>
+        <p class="hint">Ranked over the ${frontier.length} scored model${frontier.length === 1 ? '' : 's'} currently toggled on${awaiting ? ` · ${awaiting} more free without a score ${awaiting === 1 ? 'is' : 'are'} listed below` : ''}.</p>`;
       return;
     }
 
@@ -593,8 +756,10 @@
   }
 
   // ---------- excluded tray ----------
+  // Bar mode: scored models are charted, so only unscored models live here.
   function renderExcluded() {
-    excludedEl.innerHTML = excluded.map((m) => {
+    const list = BAR_MODE ? barUnscored() : excluded;
+    excludedEl.innerHTML = list.map((m) => {
       const known = m.ocCostPerM != null
         ? `$${m.ocCostPerM}/1M`
         : (m.aa && typeof m.aa.intelligenceIndex === 'number' ? `Score ${m.aa.intelligenceIndex}` : 'no data');
@@ -757,7 +922,10 @@
       if (chipBtn) {
         const id = chipBtn.dataset.chip;
         const dot = svg ? svg.querySelector(`[data-id="${id}"]`) : null;
-        if (dot) setActive(id, dot, true);
+        if (dot) {
+          if (BAR_MODE) setBarActive(id, dot, true);
+          else setActive(id, dot, true);
+        }
       }
     }, true);
 
@@ -766,7 +934,10 @@
       if (chipBtn) {
         const id = chipBtn.dataset.chip;
         const dot = svg ? svg.querySelector(`[data-id="${id}"]`) : null;
-        if (dot) setActive(null, dot, false);
+        if (dot) {
+          if (BAR_MODE) setBarActive(null, dot, false);
+          else setActive(null, dot, false);
+        }
       }
     }, true);
 
@@ -775,7 +946,7 @@
       if (!btn) return;
       const act = btn.dataset.action;
       if (act === 'all') hidden.clear();
-      else if (act === 'none') plotted.forEach((m) => hidden.add(m.id));
+      else if (act === 'none') (BAR_MODE ? barScoredAll() : plotted).forEach((m) => hidden.add(m.id));
       else if (act === 'frontier') {
         const f = frontierOf(plotted.filter((m) => !hidden.has(m.id)));
         hidden.clear();
@@ -785,7 +956,22 @@
     });
   }
 
+  // Bar mode: no cost axis, so no frontier filter and no cost sort.
+  function hideBarInapplicableControls() {
+    if (!BAR_MODE) return;
+    const fBtn = document.querySelector('[data-action="frontier"]');
+    if (fBtn) fBtn.style.display = 'none';
+    const cBtn = document.querySelector('[data-sort="cost"]');
+    if (cBtn) cBtn.style.display = 'none';
+  }
+
   function renderCount(shown, frontierLen) {
+    if (BAR_MODE) {
+      const scoredTotal = barScoredAll().length;
+      const awaiting = barUnscored().length;
+      countEl.textContent = `${shown} of ${scoredTotal} scored · ${awaiting} awaiting a score · toggling redraws it`;
+      return;
+    }
     countEl.textContent = `${shown} of ${plotted.length} plotted · frontier has ${frontierLen} model${frontierLen === 1 ? '' : 's'} · toggling redraws it`;
   }
 
@@ -806,6 +992,12 @@
   function updateTable() {
     const tbody = document.querySelector('#sr-data-table tbody');
     if (!tbody) return;
+    if (BAR_MODE) {
+      tbody.innerHTML = `
+        ${barScoredAll().map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}
+        ${barUnscored().map((m) => `<tr><td>${esc(m.label)} (awaiting score)</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
+      return;
+    }
     tbody.innerHTML = `
       ${plotted.map((m) => `<tr><td>${esc(m.label)}</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}
       ${excluded.map((m) => `<tr><td>${esc(m.label)} (not plottable)</td><td>${esc(m.author)}</td><td>${m.rank ?? '—'}</td><td>${m.ocCostPerM ?? 'n/a'}</td><td>${m.aa ? m.aa.intelligenceIndex : 'n/a'}</td></tr>`).join('')}`;
@@ -904,6 +1096,7 @@
   recompute();
   renderExcluded();
   renderToggles();
+  hideBarInapplicableControls();
   wireToggleHandlers();
   buildTable();
 
@@ -932,5 +1125,5 @@
 
   // Headless test seam: pure helpers only — nothing here captures DOM nodes
   // or mutable state, so exposing them has no effect on page behavior.
-  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, extractCuratedIds, isCurated, availableModels };
+  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, extractCuratedIds, isCurated, availableModels, scoreOf, barRows, barUnscored };
 })();

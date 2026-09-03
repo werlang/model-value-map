@@ -521,6 +521,44 @@ body {
 
 .dot-hidden { opacity: 0; pointer-events: none; }
 
+/* ---------- bar chart (free-roster pages) ---------- */
+
+.bar-row { cursor: pointer; }
+.bar-row:focus { outline: none; }
+.bar-track { fill: #e2e8ee; }
+.bar-fill {
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+.bar-row.is-active .bar-fill,
+.bar-row:hover .bar-fill,
+.bar-row:focus .bar-fill {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.bar-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--ink-dim);
+}
+.bar-row.is-active .bar-label,
+.bar-row:hover .bar-label,
+.bar-row:focus .bar-label {
+  fill: var(--ink);
+  font-weight: 700;
+}
+.bar-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--ink-dim);
+}
+.bar-row.is-active .bar-value,
+.bar-row:hover .bar-value,
+.bar-row:focus .bar-value {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .dot-enter { animation: dot-in 420ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards; }
   @keyframes dot-in {

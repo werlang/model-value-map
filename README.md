@@ -82,12 +82,13 @@ Curious about extending this with an AI agent? See [AGENTS.md](AGENTS.md).
 
 ## Free on OpenRouter
 
-[`/openrouter/`](openrouter/) reuses the same page with a different roster: the
-worker `GET /openrouter` returns the same `{ t, meta, models }` shape, but lists
-only OpenRouter models priced at $0 prompt + $0 completion
-(`openrouter.ai/api/v1/models`), scored by the same AA pipeline. $0 can't sit on
-a log cost axis, so free models render as `plot: false` with an explicit free
-reason — ranked by intelligence in the toggles and off-map tray.
+[`/openrouter/`](openrouter/) reuses the same page with a different roster and a
+different chart: the worker `GET /openrouter` returns the same
+`{ t, meta, models }` shape, but lists only OpenRouter models priced at $0
+prompt + $0 completion (`openrouter.ai/api/v1/models`), scored by the same AA
+pipeline. With no price differences to plot, the page renders a descending
+intelligence bar chart (`window.MVM_BAR_CHART`) instead of the cost scatter —
+scored models chart smartest-first, unscored ones stay listed in the tray.
 
 ## License
 

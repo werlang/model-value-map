@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Model Value Map — Free on OpenRouter × Artificial Analysis intelligence</title>
-  <meta name="description" content="Every $0 model on OpenRouter, scored by the Artificial Analysis Intelligence Index. Same map, free roster: $0/1M output lives below the log cost scale, ranked by intelligence." />
+  <meta name="description" content="Every $0 model on OpenRouter, ranked by the Artificial Analysis Intelligence Index in a descending bar chart." />
   <link rel="canonical" href="https://werlang.github.io/model-value-map/openrouter/" />
   <meta name="theme-color" content="#edf0f3" />
   <meta property="og:type" content="website" />
@@ -48,17 +48,17 @@
       </div>
     </div>
     <p class="lede">
-      Every model that costs $0 on OpenRouter, placed by its Artificial Analysis
-      Intelligence Index score. Free means $0 per million output tokens — a log
-      cost axis can't show zero, so the ranked free list lives below in the
-      model toggles and off-map tray. <a href="../">Back to the paid map ↗</a>
+      Every model that costs $0 on OpenRouter, ranked smartest-first by its
+      Artificial Analysis Intelligence Index score. Free means $0 per million
+      output tokens — with no price differences to plot, the chart is a simple
+      descending ranking. <a href="../">Back to the paid map ↗</a>
     </p>
   </header>
 
   <main class="layout">
-    <section id="chart-region" class="panel chart-panel" aria-label="Free models by intelligence score">
+    <section id="chart-region" class="panel chart-panel" aria-label="Bar chart of free models by intelligence score">
       <div class="chart-head">
-        <h2 class="panel-title">Free on OpenRouter vs intelligence score</h2>
+        <h2 class="panel-title">Free on OpenRouter · ranked by intelligence</h2>
         <div class="quick-actions" role="group" aria-label="Quick visibility filters">
           <button type="button" class="action" data-action="all">All</button>
           <button type="button" class="action" data-action="none">None</button>
@@ -74,7 +74,7 @@
           <span class="chart-loading-text">Fetching live data…</span>
         </div>
       </div>
-      <p class="axis-note">All models $0/1M on OpenRouter · log cost scale starts above zero, so free models rank below by intelligence</p>
+      <p class="axis-note">Descending by Artificial Analysis Intelligence Index · all models $0/1M on OpenRouter · unscored models listed below</p>
     </section>
 
     <aside class="side-rail">
@@ -82,9 +82,9 @@
         <div id="readout"></div>
       </section>
 
-      <section class="panel excluded-panel" aria-label="Free models">
-        <h2 class="panel-title">Free models</h2>
-        <p class="panel-sub">Every $0 OpenRouter model — scored ones show their intelligence, unscored ones are still listed so nothing quietly disappears.</p>
+      <section class="panel excluded-panel" aria-label="Free models awaiting a score">
+        <h2 class="panel-title">Awaiting a score</h2>
+        <p class="panel-sub">Free on OpenRouter but not yet scored by Artificial Analysis — listed here so nothing quietly disappears.</p>
         <ul class="excluded-list" id="excluded-list"></ul>
       </section>
     </aside>
@@ -124,6 +124,7 @@
   <script>
     window.MVM_WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/openrouter';
     window.MVM_NO_CURATED = 1;
+    window.MVM_BAR_CHART = 1;
   </script>
   <script src="../live.js" defer></script>
   <script src="../app.js" defer></script>

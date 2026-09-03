@@ -29,6 +29,7 @@ export function makeClock(startMs = DEFAULT_CLOCK_START) {
 
 export function createSandbox({
   snapshotSource = null,          // string overriding data.js entirely
+  prelude = null,                 // JS run first: window flags (e.g. bar mode) before app scripts
   storage = makeStorage(),
   fetchImpl,
   WorkerClass = null,
@@ -73,6 +74,7 @@ export function createSandbox({
   box.globalThis = box;
   vm.createContext(box);
 
+  if (prelude) vm.runInContext(prelude, box, { filename: path.join(ROOT, 'prelude.js') });
   const src = snapshotSource ?? (fs.existsSync(path.join(ROOT, 'data.js')) ? read('data.js') : null);
   if (src) vm.runInContext(src, box, { filename: path.join(ROOT, 'data.js') });
   if (loadLive) vm.runInContext(read('live.js'), box, { filename: path.join(ROOT, 'live.js') });
