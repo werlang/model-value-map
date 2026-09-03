@@ -80,6 +80,15 @@ Curious about extending this with an AI agent? See [AGENTS.md](AGENTS.md).
 - AA scores are per published model variant on the Artificial Analysis Intelligence Index.
 - Missing either axis keeps a model visible in the "Off the map" tray with an explicit exclusion reason.
 
+## Free on OpenRouter
+
+[`/openrouter/`](openrouter/) reuses the same page with a different roster: the
+worker `GET /openrouter` returns the same `{ t, meta, models }` shape, but lists
+only OpenRouter models priced at $0 prompt + $0 completion
+(`openrouter.ai/api/v1/models`), scored by the same AA pipeline. $0 can't sit on
+a log cost axis, so free models render as `plot: false` with an explicit free
+reason — ranked by intelligence in the toggles and off-map tray.
+
 ## License
 
 [MIT](LICENSE)

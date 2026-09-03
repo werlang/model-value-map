@@ -36,10 +36,11 @@ These are design decisions, not accidents. Do not violate them without explicit 
 | File               | Responsibility |
 | ------------------ | -------------- |
 | `index.html`       | Semantic shell; loads scripts in order: live → app |
+| `openrouter/index.html` | Free-roster shell; same scripts with `MVM_WORKER_URL` → `/openrouter` and `MVM_NO_CURATED` (no Go-table filter) |
 | `styles.css`       | Design tokens + components (IBM Plex Mono/Sans) |
-| `live.js`          | Worker-only fetch (`GET /`), validation, localStorage cache/TTL/lastgood |
+| `live.js`          | Worker-only fetch (`GET /`, override via `window.MVM_WORKER_URL`), validation, localStorage cache/TTL/lastgood |
 | `app.js`           | Go-table roster filter, scales (log x, linear y), Pareto computation, SVG render, toggles, readout |
-| `worker/index.js`  | Sanitized endpoint: joins models.dev + AA (keyed API, backed up by keyless public-page scores), emits Go-table models missing an axis as off-map, `GET /curated` returns the Go-table roster |
+| `worker/index.js`  | Sanitized endpoint: joins models.dev + AA (keyed API, backed up by keyless public-page scores), emits Go-table models missing an axis as off-map, `GET /curated` returns the Go-table roster, `GET /openrouter` returns the same shape for free OpenRouter models |
 | `wrangler.toml`    | Worker config (`AA_API_KEY` via `wrangler secret put`) |
 | `tests/`           | Headless behavioral suite (`npm test`) — sandbox + stubs, no dependencies |
 

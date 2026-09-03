@@ -13,6 +13,9 @@
   // The Go docs table is the roster: every model listed there must show.
   const CURATED_URLS = ['https://opencode.ai/docs/go'];
   const WORKER_CURATED_URL = 'https://model-value-map-api.pswerlang.workers.dev/curated';
+  // Free-roster pages (e.g. /openrouter/) set window.MVM_NO_CURATED to show
+  // every payload model instead of filtering to the Go table.
+  const NO_CURATED = (typeof window !== 'undefined' && window.MVM_NO_CURATED) ? true : false;
   let curatedSet = null;
 
   function isCurated(m) {
@@ -36,6 +39,7 @@
     return false;
   }
   function availableModels() {
+    if (NO_CURATED) return MODELS;
     return curatedSet ? MODELS.filter(isCurated) : MODELS;
   }
 
@@ -169,6 +173,7 @@
   }
 
   async function loadCurated() {
+    if (NO_CURATED) return;
     let curatedRaw = null;
     for (const url of CURATED_URLS) {
       try {
@@ -870,6 +875,11 @@
   function applyLiveResult(res) {
     if (res && res.models) {
       MODELS = res.models;
+      if (res.meta && Array.isArray(res.meta.sources) && res.meta.sources.length && sourceLinksEl) {
+        sourceLinksEl.innerHTML = res.meta.sources
+          .map((s) => `<a href="${s.url}" target="_blank" rel="noopener">${esc(s.name)}</a>`)
+          .join(' · ');
+      }
       for (const id of [...hidden]) if (!availableModels().some((m) => m.id === id)) hidden.delete(id);
       activeId = null;
       recompute();

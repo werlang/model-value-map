@@ -7,7 +7,8 @@
 window.LiveData = (function () {
   'use strict';
 
-  const WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
+  const DEFAULT_WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
+  const WORKER_URL = (typeof window !== 'undefined' && window.MVM_WORKER_URL) || DEFAULT_WORKER_URL;
   const CACHE_KEY = 'mvm.live.v1';
   const CACHE_LASTGOOD = 'mvm.live.lastgood';
   const TTL_MS = 30 * 60 * 1000;

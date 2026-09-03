@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Model Value Map — Free on OpenRouter × Artificial Analysis intelligence</title>
+  <meta name="description" content="Every $0 model on OpenRouter, scored by the Artificial Analysis Intelligence Index. Same map, free roster: $0/1M output lives below the log cost scale, ranked by intelligence." />
+  <link rel="canonical" href="https://werlang.github.io/model-value-map/openrouter/" />
+  <meta name="theme-color" content="#edf0f3" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Model Value Map" />
+  <meta property="og:url" content="https://werlang.github.io/model-value-map/openrouter/" />
+  <meta property="og:title" content="Model Value Map — free on OpenRouter" />
+  <meta property="og:description" content="Every free OpenRouter model, scored by the Artificial Analysis Intelligence Index and ranked by intelligence." />
+  <meta property="og:image" content="https://werlang.github.io/model-value-map/assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Ranked list of free OpenRouter AI models by intelligence score." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Warm direct data origins -->
+  <link rel="preconnect" href="https://openrouter.ai" />
+  <link rel="preconnect" href="https://artificialanalysis.ai" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f49e0'/%3E%3Cpath d='M6 22 L14 20 L22 10' stroke='%23fbfcfd' stroke-width='3' stroke-dasharray='5 3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#chart-region">Skip to chart</a>
+
+  <header class="masthead">
+    <p class="eyebrow">OpenRouter free models × Artificial Analysis Intelligence Index</p>
+    <div class="masthead-row">
+      <h1 class="display">The free frontier.</h1>
+      <div class="masthead-meta">
+        <a class="github-chip" href="https://github.com/werlang/model-value-map" target="_blank" rel="noopener" title="Source code on GitHub">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span>werlang/model-value-map</span>
+        </a>
+        <p class="updated-stamp" id="stamp">
+          <span class="stamp-dot" aria-hidden="true"></span>
+          <span id="stamp-text">Loading live data…</span>
+          <button type="button" class="stamp-refresh" id="stamp-refresh" title="Fetch fresh data from both sources" aria-label="Refresh live data">
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96M13.6 1.6v3h-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </p>
+      </div>
+    </div>
+    <p class="lede">
+      Every model that costs $0 on OpenRouter, placed by its Artificial Analysis
+      Intelligence Index score. Free means $0 per million output tokens — a log
+      cost axis can't show zero, so the ranked free list lives below in the
+      model toggles and off-map tray. <a href="../">Back to the paid map ↗</a>
+    </p>
+  </header>
+
+  <main class="layout">
+    <section id="chart-region" class="panel chart-panel" aria-label="Free models by intelligence score">
+      <div class="chart-head">
+        <h2 class="panel-title">Free on OpenRouter vs intelligence score</h2>
+        <div class="quick-actions" role="group" aria-label="Quick visibility filters">
+          <button type="button" class="action" data-action="all">All</button>
+          <button type="button" class="action" data-action="none">None</button>
+          <button type="button" class="action" data-action="frontier">Frontier only</button>
+        </div>
+      </div>
+      <div class="chart-holder" id="chart-holder">
+        <div class="chart-loading" id="chart-loading" aria-hidden="true">
+          <svg class="chart-spinner" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <circle class="chart-spinner-track" cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2" opacity="0.25" />
+            <path class="chart-spinner-head" d="M14 8a6 6 0 0 0-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <span class="chart-loading-text">Fetching live data…</span>
+        </div>
+      </div>
+      <p class="axis-note">All models $0/1M on OpenRouter · log cost scale starts above zero, so free models rank below by intelligence</p>
+    </section>
+
+    <aside class="side-rail">
+      <section class="panel readout-panel" aria-label="Model readout" aria-live="polite">
+        <div id="readout"></div>
+      </section>
+
+      <section class="panel excluded-panel" aria-label="Free models">
+        <h2 class="panel-title">Free models</h2>
+        <p class="panel-sub">Every $0 OpenRouter model — scored ones show their intelligence, unscored ones are still listed so nothing quietly disappears.</p>
+        <ul class="excluded-list" id="excluded-list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <section class="panel toggles-panel" aria-label="Toggle models">
+    <div class="toggles-head">
+      <div>
+        <h2 class="panel-title">Models</h2>
+        <p class="panel-sub" id="visible-count"></p>
+      </div>
+      <div class="toggles-switcher" role="group" aria-label="Sort models list by">
+        <span class="switcher-label">Sort:</span>
+        <button type="button" class="sort-btn active" data-sort="score" aria-pressed="true">Intelligence Score ↓</button>
+        <button type="button" class="sort-btn" data-sort="cost" aria-pressed="false">Cost (Output) ↑</button>
+        <button type="button" class="sort-btn" data-sort="provider" aria-pressed="false">Provider (A–Z)</button>
+      </div>
+    </div>
+    <div id="toggles"></div>
+  </section>
+
+  <footer class="colophon">
+    <div class="source-row">
+      <p><strong>Roster</strong> — every $0 model from <a href="https://openrouter.ai/api/v1/models" target="_blank" rel="noopener">openrouter.ai/api/v1/models</a> (prompt $0 + completion $0).</p>
+      <p><strong>Scores</strong> — <span id="aa-index-name">Artificial Analysis Intelligence Index</span>,
+        independently measured by <a href="https://artificialanalysis.ai" target="_blank" rel="noopener">Artificial Analysis</a>.</p>
+    </div>
+    <p class="source-links" id="source-links"></p>
+    <p class="source-links">Static page — no build step, no dependencies, MIT licensed. Code &amp; issues:
+      <a href="https://github.com/werlang/model-value-map" target="_blank" rel="noopener">github.com/werlang/model-value-map</a></p>
+    <p class="caveat">
+      Data is retrieved live from OpenRouter and Artificial Analysis in parallel and cached in LocalStorage for 30 minutes.
+      Scores compare model variants as published (effort levels noted in the readout). Use ⟳ to force a refresh.
+    </p>
+  </footer>
+
+  <script>
+    window.MVM_WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/openrouter';
+    window.MVM_NO_CURATED = 1;
+  </script>
+  <script src="../live.js" defer></script>
+  <script src="../app.js" defer></script>
+</body>
+</html>

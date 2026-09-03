@@ -500,6 +500,111 @@ function parseAaFree(pages) {
   return map;
 }
 
+// ---------- OpenRouter parsing (openrouter.ai/api/v1/models) ----------
+// Free = $0 prompt AND $0 completion. Pricing arrives as USD-per-token
+// strings (e.g. '0.0000002' = $0.20/1M); '0' means free.
+function orBaseId(id) {
+  const s = String(id || '');
+  const afterSlash = s.includes('/') ? s.split('/').pop() : s;
+  return afterSlash.split(':')[0].toLowerCase();
+}
+
+function orProvider(id) {
+  const s = String(id || '');
+  return s.includes('/') ? s.split('/')[0] : null;
+}
+
+function orPriceToNumber(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function parseOpenRouter(data) {
+  const list = [];
+  const map = new Map();
+  if (!data || typeof data !== 'object' || !Array.isArray(data.data)) return { list, map };
+  const seenBase = new Set();
+  for (const m of data.data) {
+    if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !m.id) continue;
+    const pricing = (m.pricing && typeof m.pricing === 'object') ? m.pricing : {};
+    if (orPriceToNumber(pricing.prompt) !== 0 || orPriceToNumber(pricing.completion) !== 0) continue;
+    const base = orBaseId(m.id);
+    if (!base || base.length < 2 || base.length > 80) continue;
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(base)) continue;
+    if (seenBase.has(base)) continue;
+    seenBase.add(base);
+    const provider = orProvider(m.id);
+    let author = null;
+    if (typeof m.name === 'string' && m.name.includes(':')) author = m.name.split(':')[0].trim() || null;
+    if (!author && provider) author = provider.charAt(0).toUpperCase() + provider.slice(1);
+    const topProvider = (m.top_provider && typeof m.top_provider === 'object') ? m.top_provider : {};
+    const info = {
+      orId: m.id,
+      id: base,
+      name: (typeof m.name === 'string' && m.name) || base,
+      author,
+      provider,
+      cost: { input: 0, output: 0, cacheRead: orPriceToNumber(pricing.input_cache_read), cacheWrite: null },
+      limit: {
+        context: (typeof m.context_length === 'number' && Number.isFinite(m.context_length)) ? m.context_length : null,
+        output: (typeof topProvider.max_completion_tokens === 'number' && Number.isFinite(topProvider.max_completion_tokens)) ? topProvider.max_completion_tokens : null,
+      },
+      openWeights: null,
+      reasoning: !!m.reasoning,
+    };
+    list.push(info);
+    const keys = [m.id, base, normSlug(m.id), normSlug(base), dashNorm(m.id), dashNorm(base)];
+    for (const k of keys) if (k && !map.has(k)) map.set(k, info);
+  }
+  return { list, map };
+}
+
+// Join free OpenRouter models with AA intelligence (same sanitized shape as
+// buildModels). Cost is always $0/1M, which a log scale cannot show, so every
+// entry is plot:false — scored models land in the "Off the map" tray with an
+// explicit free reason instead of being silently dropped.
+function buildOpenRouterFreeModels(orList, aaMap) {
+  const out = [];
+  const arr = Array.isArray(orList) ? orList : [];
+  for (const e of arr) {
+    if (!e || !e.id) continue;
+    const base = String(e.id).toLowerCase();
+    const aaRec = (resolveAaRecordForOc(base, aaMap) || aaLookupNorm(base, aaMap)) || null;
+    const hasScore = !!(aaRec && typeof aaRec.intelligenceIndex === 'number' && Number.isFinite(aaRec.intelligenceIndex) && aaRec.intelligenceIndex > 0);
+    const author = (aaRec && aaRec.creator) || e.author || null;
+    out.push({
+      id: base,
+      label: (aaRec && aaRec.shortName) || e.name || base,
+      author,
+      ocCostPerM: 0,
+      ocCost: e.cost || { input: 0, output: 0, cacheRead: null, cacheWrite: null },
+      intelligenceIndex: hasScore ? aaRec.intelligenceIndex : null,
+      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url } : null,
+      contextWindowTokens: (e.limit && e.limit.context) || null,
+      reasoning: !!e.reasoning,
+      openWeights: e.openWeights != null ? e.openWeights : (aaRec ? !!aaRec.isOpenWeights : null),
+      plot: false,
+      excludeReason: hasScore
+        ? 'Free on OpenRouter — $0/1M output (off the log cost scale).'
+        : 'Not scored on the Artificial Analysis Intelligence Index yet.',
+      hue: (aaRec && aaRec.creatorColor) || hueFor(author),
+      weeklyTokensT: null,
+      rank: null,
+    });
+  }
+  out.sort((a, b) => {
+    const sa = a.aa ? a.aa.intelligenceIndex : -1;
+    const sb = b.aa ? b.aa.intelligenceIndex : -1;
+    if (sb !== sa) return sb - sa;
+    return String(a.label).localeCompare(String(b.label));
+  });
+  return out;
+}
+
 function buildModels(mdMap, aaMap, curatedDocsIds) {
   const out = [];
   const seen = new Set();
@@ -722,6 +827,89 @@ export default {
         return new Response(JSON.stringify({ error: 'Failed to build curated list', detail: msg }), { status: 502, headers: { 'Content-Type': 'application/json', ...CORS } });
       }
     }
+    // Free OpenRouter models joined with AA intelligence — same sanitized
+    // shape as GET / ({ t, meta, models }), but the roster is every $0
+    // OpenRouter model instead of the Go table. No key, CORS *.
+    if (request.method === 'GET' && (url.pathname === '/openrouter' || url.pathname === '/api/openrouter' || url.pathname === '/v1/openrouter' || url.pathname === '/openrouter/')) {
+      try {
+        const cache = caches.default;
+        const cacheKey = new Request(url.origin + '/__openrouter_cache', request);
+        const cached = await cache.match(cacheKey);
+        if (cached) return cached;
+        const [orRes, aaPages, aaIndexHtml] = await Promise.all([
+          fetch('https://openrouter.ai/api/v1/models', { headers: { 'Accept': 'application/json' }, cf: { cacheTtl: 300 } }),
+          fetchAaAll(env),
+          fetch('https://artificialanalysis.ai/models', { headers: { 'Accept': 'text/html' }, cf: { cacheTtl: 300 } })
+            .then((r) => (r.ok ? r.text() : '')).catch(() => ''),
+        ]);
+        if (!orRes.ok) throw new Error(`OpenRouter fetch failed ${orRes.status}`);
+        const orJson = await orRes.json();
+        const orTotal = orJson && Array.isArray(orJson.data) ? orJson.data.length : 0;
+        const { list: orList } = parseOpenRouter(orJson);
+        const aaMap = parseAaFree(aaPages);
+        // tier 2: keyless index page scores for slugs the keyed API omitted
+        mergeAaScores(aaMap, extractAaIndexScores(aaIndexHtml));
+        // tier 3: per-model pages for free models still missing a score (bounded, fail-soft)
+        if (orList.length) {
+          const flight = extractFlight(aaIndexHtml);
+          const allAaSlugs = extractAllAaSlugs(flight);
+          for (const s of scanJsonLdScores(aaIndexHtml).keys()) allAaSlugs.add(s);
+          for (const s of aaMap.keys()) allAaSlugs.add(s);
+          const need = [];
+          const seenSlugs = new Set();
+          for (const e of orList) {
+            if (resolveAaSlugForOc(e.id, aaMap)) continue;
+            const fetchSlug = bestFetchSlugForOc(e.id, allAaSlugs);
+            if (!fetchSlug || seenSlugs.has(fetchSlug)) continue;
+            if (aaMap.has(fetchSlug) || aaMap.has(dashNorm(fetchSlug)) || aaMap.has(normSlug(fetchSlug))) continue;
+            seenSlugs.add(fetchSlug);
+            need.push(fetchSlug);
+            if (need.length >= 20) break;
+          }
+          if (need.length) {
+            const pages = await Promise.all(need.map((s) =>
+              fetch('https://artificialanalysis.ai/models/' + encodeURIComponent(s), { headers: { 'Accept': 'text/html' }, cf: { cacheTtl: 300 } })
+                .then((r) => (r.ok ? r.text() : '')).catch(() => ''),
+            ));
+            for (let i = 0; i < need.length; i++) {
+              const slug = need[i];
+              let rec = extractAaModelPageRecord(pages[i], slug);
+              if (!rec) {
+                const alt = scanAaFlightRecords(extractFlight(pages[i]));
+                if (alt.size === 1) rec = [...alt.values()][0];
+                else if (alt.has(slug)) rec = alt.get(slug);
+              }
+              if (rec) aaMap.set(slug, rec);
+            }
+          }
+        }
+        const models = buildOpenRouterFreeModels(orList, aaMap);
+        const scored = models.filter((m) => m.aa).length;
+        const payload = {
+          t: Date.now(),
+          meta: {
+            retrieved: new Date().toISOString(),
+            aaIndex: `Artificial Analysis Intelligence Index v4.1 (free tier + public pages, ${aaMap.size} models)`,
+            orModels: orTotal,
+            freeCount: orList.length,
+            scored,
+            sources: [
+              { name: 'openrouter.ai/api/v1/models', url: 'https://openrouter.ai/api/v1/models' },
+              { name: 'artificialanalysis.ai/api/v2/language/models/free', url: 'https://artificialanalysis.ai/api/v2/language/models/free' },
+            ],
+          },
+          models,
+        };
+        const body = JSON.stringify(payload);
+        const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60, s-maxage=300', ...CORS };
+        const resp = new Response(body, { status: 200, headers });
+        ctx.waitUntil(cache.put(cacheKey, resp.clone()));
+        return resp;
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err);
+        return new Response(JSON.stringify({ error: 'Failed to build OpenRouter free list', detail: msg }), { status: 502, headers: { 'Content-Type': 'application/json', ...CORS } });
+      }
+    }
     try {
       const cache = caches.default;
       const cacheKey = new Request(url.origin + '/__worker_cache', request);
@@ -848,5 +1036,8 @@ export const __TEST__ = {
   resolveMdForAa,
   bestFetchSlugForOc,
   aaRecordFromObj,
+  parseOpenRouter,
+  buildOpenRouterFreeModels,
+  orBaseId,
   __AA_SLUG: AA_SLUG,
 };
