@@ -382,6 +382,62 @@ function mdLookupForAa(aaSlug, mdMap) {
   return null;
 }
 
+// ---------- mdMap join index ----------
+// The OC↔AA join tests every mdMap key against every AA slug; done inline
+// that is |aaMap| × |mdMap| dashNorm() calls (~12M regex ops per request,
+// 1.4s+ of CPU — enough to trip the Worker CPU limit). Build the join index
+// once per mdMap instead: precomputed dash-normalized keys, bucketed by kd
+// and sorted for prefix range lookups. mdMap is only ever built, never
+// mutated afterwards, so caching per-map is safe (size guard included).
+const MD_INDEX_CACHE = new WeakMap();
+// scratch reused across collectMdMatches() calls (single-threaded, no reentrancy)
+const MD_MATCH_POOL = [];
+
+function mdIndexOf(mdMap) {
+  let idx = MD_INDEX_CACHE.get(mdMap);
+  if (idx && idx.size === mdMap.size) return idx;
+  const byKd = new Map(); // kd -> [entries in mdMap insertion order]
+  let ord = 0;
+  for (const [k, v] of mdMap) {
+    const kd = dashNorm(k);
+    let bucket = byKd.get(kd);
+    if (!bucket) { bucket = []; byKd.set(kd, bucket); }
+    bucket.push({ ord: ord++, k, v, kd });
+  }
+  idx = { size: mdMap.size, byKd, kdSorted: [...byKd.keys()].sort() };
+  MD_INDEX_CACHE.set(mdMap, idx);
+  return idx;
+}
+
+/**
+ * Fill `out` with every index entry whose kd matches `d` under the join rules
+ * (kd === d || d.startsWith(kd + '-') || kd.startsWith(d + '-')), ordered by
+ * mdMap insertion position — identical to scanning mdMap directly.
+ * The three match classes yield strictly shorter / equal / strictly longer
+ * kd values, so their buckets never overlap.
+ */
+function collectMdMatches(d, idx, out) {
+  out.length = 0;
+  const addBucket = (kd) => {
+    const b = idx.byKd.get(kd);
+    if (b) for (const e of b) out.push(e);
+  };
+  addBucket(d); // kd === d
+  // d.startsWith(kd + '-') — kd is d cut at one of its dash positions
+  for (let i = d.indexOf('-'); i !== -1; i = d.indexOf('-', i + 1)) addBucket(d.slice(0, i));
+  // kd.startsWith(d + '-') — contiguous prefix range over sorted kds
+  const p = d + '-';
+  let lo = 0, hi = idx.kdSorted.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (idx.kdSorted[mid] < p) lo = mid + 1; else hi = mid; }
+  for (let j = lo; j < idx.kdSorted.length; j++) {
+    const kd = idx.kdSorted[j];
+    if (kd.lastIndexOf(p, 0) !== 0) break;
+    addBucket(kd);
+  }
+  out.sort((a, b) => a.ord - b.ord);
+  return out;
+}
+
 function resolveMdForAa(aaSlug, mdMap, curatedDashSet) {
   const direct = mdLookupForAa(aaSlug, mdMap);
   // collect all candidates that match via exact / stripped / prefix
@@ -399,15 +455,11 @@ function resolveMdForAa(aaSlug, mdMap, curatedDashSet) {
     const hit = mdLookupForAa(v, mdMap);
     if (hit) addCand(hit, dashNorm(v), Math.abs(d.length - dashNorm(v).length) + 0.1);
   }
-  // prefix search over OC keys
-  for (const [k, v] of mdMap) {
-    const kd = dashNorm(k);
-    if (kd === d) {
-      addCand(v, kd, 0);
-    } else if (d.startsWith(kd + '-') || kd.startsWith(d + '-')) {
-      const diff = Math.abs(d.length - kd.length);
-      addCand(v, kd, diff + 0.5);
-    }
+  // prefix search over OC keys (via the shared mdMap index)
+  const matches = collectMdMatches(d, mdIndexOf(mdMap), MD_MATCH_POOL);
+  for (const e of matches) {
+    const score = e.kd === d ? 0 : Math.abs(d.length - e.kd.length) + 0.5;
+    addCand(e.v, e.kd, score);
   }
   if (!candidates.length) return null;
   if (candidates.length === 1) return candidates[0].md;
@@ -674,12 +726,9 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
       // use the same curated-aware resolution that chose md to pick the best OC key
       const candidates = [];
       const d = dashNorm(slug);
-      for (const [k] of mdMap) {
-        const kd = dashNorm(k);
-        if (kd === d) { candidates.push({ k, kd, score: 0 }); }
-        else if (d.startsWith(kd + '-') || kd.startsWith(d + '-')) {
-          candidates.push({ k, kd, score: Math.abs(d.length - kd.length) + 0.5 });
-        }
+      for (const e of collectMdMatches(d, mdIndexOf(mdMap), MD_MATCH_POOL)) {
+        const score = e.kd === d ? 0 : Math.abs(d.length - e.kd.length) + 0.5;
+        candidates.push({ k: e.k, kd: e.kd, score });
       }
       // stripped AA variants
       if (!candidates.length) {
