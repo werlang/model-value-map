@@ -10,15 +10,7 @@ export const MODELS_DEV = 'https://models.dev/api.json';
 export const AA_INDEX = 'https://artificialanalysis.ai/models';
 export const WORKER_URL = 'https://model-value-map-api.pswerlang.workers.dev/';
 export const WORKER_URL_RE = /^https:\/\/model-value-map-api\.pswerlang\.workers\.dev\/$/;
-export const CURATED_GO = 'https://opencode.ai/docs/go';
 export const WORKER_CURATED = 'https://model-value-map-api.pswerlang.workers.dev/curated';
-
-function curatedHtmlFor(snapshot) {
-  const ids = snapshot.map((m) => m.id);
-  const rows = ids.map((id) => `<tr><td>${id} label</td><td>${id}</td></tr>`).join('');
-  const lis = ids.map((id) => `<li><strong>${id}</strong></li>`).join('');
-  return `<html><body><table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>${rows}</tbody></table><ul>${lis}</ul></body></html>`;
-}
 
 function buildWorkerModels(snapshot, coverage, modelsDev) {
   const AA_SLUG = {
@@ -147,20 +139,15 @@ export function standardEnv(over = {}) {
 
   const rules = [];
   rules.push(workerRule);
-  // curated Go docs (app scrapes at boot) + worker curated fallback
-  const goHtml = over.curatedGoHtml ?? curatedHtmlFor(snapshot);
+  // roster: scraped server-side by the worker (opencode.ai sends no CORS
+  // headers), so the browser only ever asks the worker's /curated endpoint
   const curatedIds = over.curatedIds ?? snapshot.map((m) => m.id);
   const workerCuratedRule = (() => {
     if (over.workerCuratedRule) return over.workerCuratedRule;
     if (over.workerCuratedFail) return { test: WORKER_CURATED, fail: true };
     return { test: WORKER_CURATED, json: { t: over.clockStart ?? DEFAULT_CLOCK_START, ids: curatedIds } };
   })();
-  const goRule = (() => {
-    if (over.curatedGoRule) return over.curatedGoRule;
-    if (over.curatedGoFail) return { test: CURATED_GO, fail: true };
-    return { test: CURATED_GO, body: goHtml };
-  })();
-  rules.push(goRule, workerCuratedRule);
+  rules.push(workerCuratedRule);
   if (over.aaPageRules) rules.push(...over.aaPageRules);
   else if (over.aaPageRule) rules.push(over.aaPageRule);
   else rules.push({ test: /^https:\/\/artificialanalysis\.ai\/models\/.+/, status: 404 });

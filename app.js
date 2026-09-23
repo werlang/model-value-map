@@ -16,7 +16,10 @@
 
   // ---------- curated filter (Go table) ----------
   // The Go docs table is the roster: every model listed there must show.
-  const CURATED_URLS = ['https://opencode.ai/docs/go'];
+  // opencode.ai sends no CORS headers, so the browser can never read the docs
+  // directly — the worker scrapes them server-side and exposes the ids here
+  // (CORS *). Going straight to it skips a guaranteed-failed request and
+  // applies the roster one round trip sooner.
   const WORKER_CURATED_URL = 'https://model-value-map-api.pswerlang.workers.dev/curated';
   // Free-roster pages (e.g. /openrouter/) set window.MVM_NO_CURATED to show
   // every payload model instead of filtering to the Go table.
@@ -80,92 +83,6 @@
     return availableModels().filter((m) => scoreOf(m) == null);
   }
 
-  function extractCuratedIds(html) {
-    const ids = new Set();
-    if (!html || typeof html !== 'string') return ids;
-    function isSpurious(low) {
-      return low.includes('limit') || low.includes('http') || low.includes('requests per') || low.includes('endpoint') || low.includes('package') || low.includes('hour') || low.includes('weekly') || low.includes('monthly');
-    }
-    try {
-      if (typeof DOMParser !== 'undefined') {
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const tables = doc.querySelectorAll('table');
-        for (const tbl of tables) {
-          let headerCells = [...tbl.querySelectorAll('thead th')];
-          if (!headerCells.length) {
-            const firstRow = tbl.querySelector('tr');
-            if (firstRow) headerCells = [...firstRow.querySelectorAll('th, td')];
-          }
-          const headers = headerCells.map((th) => th.textContent.trim().toLowerCase());
-          let colIdx = -1;
-          for (let i = 0; i < headers.length; i++) if (headers[i].includes('model id')) { colIdx = i; break; }
-          if (colIdx === -1) for (let i = 0; i < headers.length; i++) if (headers[i] === 'model') { colIdx = i; break; }
-          if (colIdx === -1) continue;
-          const rows = tbl.querySelectorAll('tbody tr');
-          const rowList = rows.length ? [...rows] : [...tbl.querySelectorAll('tr')].slice(1);
-          for (const row of rowList) {
-            const cells = [...row.querySelectorAll('td')];
-            if (cells.length <= colIdx) continue;
-            let raw = cells[colIdx].textContent.trim().replace(/:+$/, '').trim();
-            if (!raw || raw.toLowerCase() === 'model' || raw.toLowerCase() === 'model id') continue;
-            raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
-            if (raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
-            const low = raw.toLowerCase();
-            if (isSpurious(low)) continue;
-            ids.add(raw);
-            ids.add(low);
-            ids.add(low.replace(/[\s\/\._]+/g, '-'));
-            ids.add(low.replace(/[\/._]/g, '-'));
-            const noFree = low.replace(/-free$/, '');
-            if (noFree !== low) {
-              ids.add(noFree);
-              ids.add(noFree.replace(/[\s\/\._]+/g, '-'));
-            }
-          }
-        }
-        for (const el of doc.querySelectorAll('ul li strong')) {
-          let raw = el.textContent.trim().replace(/:+$/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
-          if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
-          const low = raw.toLowerCase();
-          if (isSpurious(low)) continue;
-          ids.add(raw);
-          ids.add(low);
-          ids.add(low.replace(/[\s\/\._]+/g, '-'));
-          ids.add(low.replace(/[\/._]/g, '-'));
-        }
-        if (ids.size) return ids;
-      }
-    } catch (_) {}
-    const tdRe = /<t[dh][^>]*>([^<]*?)<\/t[dh]>/gi;
-    let m;
-    while ((m = tdRe.exec(html))) {
-      let raw = m[1].replace(/<[^>]+>/g, '').replace(/&#x[^;]+;/g, ' ').replace(/&[^;]+;/g, ' ').trim().replace(/:+$/, '').trim();
-      raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim();
-      if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
-      const low = raw.toLowerCase();
-      if (low === 'model' || low === 'model id' || isSpurious(low) || low.includes('endpoint') || low.includes('package')) continue;
-      if (/^\$/.test(raw) || /^\d+[\d,\.]*$/.test(raw)) continue;
-      ids.add(raw);
-      ids.add(low);
-      ids.add(low.replace(/[\s\/\._]+/g, '-'));
-      ids.add(low.replace(/[\/._]/g, '-'));
-      const noFree = low.replace(/-free$/, '');
-      if (noFree !== low) { ids.add(noFree); ids.add(noFree.replace(/[\s\/\._]+/g, '-')); }
-    }
-    const liRe = /<li[^>]*>\s*<strong[^>]*>([\s\S]*?)<\/strong>/gi;
-    while ((m = liRe.exec(html))) {
-      let raw = m[1].replace(/<[^>]+>/g, '').trim().replace(/:+$/, '').trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
-      if (!raw || raw.length < 2 || raw.length > 60 || !/[a-zA-Z]/.test(raw)) continue;
-      const low = raw.toLowerCase();
-      if (isSpurious(low)) continue;
-      ids.add(raw);
-      ids.add(low);
-      ids.add(low.replace(/[\s\/\._]+/g, '-'));
-      ids.add(low.replace(/[\/._]/g, '-'));
-    }
-    return ids;
-  }
-
   function applyCuratedIds(rawSet) {
     if (!rawSet || !rawSet.size) return false;
     const expanded = new Set();
@@ -200,27 +117,12 @@
 
   async function loadCurated() {
     if (NO_CURATED) return;
-    let curatedRaw = null;
-    for (const url of CURATED_URLS) {
-      try {
-        const res = await fetch(url, { headers: { 'Accept': 'text/html' }, credentials: 'omit', referrerPolicy: 'no-referrer' });
-        if (!res.ok) continue;
-        const html = await res.text();
-        const ids = extractCuratedIds(html);
-        if (ids.size) { curatedRaw = ids; break; }
-      } catch (_) {}
-    }
-    if (curatedRaw && curatedRaw.size) {
-      applyCuratedIds(curatedRaw);
-      return;
-    }
     try {
       const res = await fetch(WORKER_CURATED_URL, { headers: { 'Accept': 'application/json' }, credentials: 'omit', referrerPolicy: 'no-referrer' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.ids) && data.ids.length) {
-          applyCuratedIds(new Set(data.ids));
-        }
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && Array.isArray(data.ids) && data.ids.length) {
+        applyCuratedIds(new Set(data.ids));
       }
     } catch (_) {}
   }
@@ -1130,5 +1032,5 @@
 
   // Headless test seam: pure helpers only — nothing here captures DOM nodes
   // or mutable state, so exposing them has no effect on page behavior.
-  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, extractCuratedIds, isCurated, availableModels, scoreOf, barRows, barUnscored };
+  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, isCurated, availableModels, scoreOf, barRows, barUnscored };
 })();

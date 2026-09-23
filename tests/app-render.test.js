@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { standardEnv, MODELS_DEV, AA_INDEX, CURATED_GO, WORKER_CURATED } from './helpers/setup-live.js';
+import { standardEnv, MODELS_DEV, AA_INDEX, WORKER_CURATED } from './helpers/setup-live.js';
 import { makeStorage } from './helpers/storage.js';
 import { DEFAULT_CLOCK_START } from './helpers/sandbox.js';
 import {
@@ -425,31 +425,33 @@ test('live refresh keeps the curated filter applied', async () => {
   assert.equal(dotOf(env, 'claude-fable-5'), undefined);
 });
 
-test('when the Go docs and the worker curated endpoint all fail, nothing is filtered', async () => {
-  const env = curatedPage({ curatedGoFail: true, workerCuratedFail: true });
+test('when the worker curated endpoint fails, nothing is filtered', async () => {
+  const env = curatedPage({ workerCuratedFail: true });
   await env.sb.settle();
   assert.equal(dotsOf(env).length, 5); // full roster including the noise model
 });
 
-test('worker curated endpoint covers a direct docs failure (CORS blocked)', async () => {
-  const env = curatedPage({ curatedGoFail: true });
+test('the roster comes from the worker /curated endpoint alone', async () => {
+  const env = curatedPage();
   await env.sb.settle();
+  // opencode.ai serves no CORS headers, so the docs must never be requested
+  const calls = env.fetch.drain();
+  assert.ok(!calls.some((u) => u.includes('opencode.ai')), 'no direct docs fetch: ' + calls.join(', '));
+  assert.ok(calls.includes(WORKER_CURATED), 'worker /curated supplies the roster');
   assert.equal(dotOf(env, 'claude-fable-5'), undefined);
   assert.equal(dotsOf(env).length, 4);
 });
 
 test('every model on the Go table shows, even ones absent from Zen (e.g. glm-5.3)', async () => {
   const models = fullSnapshot();
-  const goHtml = `<table><thead><tr><th>Model</th><th>Model ID</th></tr></thead><tbody>` +
-    models.map((m) => `<tr><td>${m.label}</td><td>${m.id}</td></tr>`).join('') +
-    `<tr><td>GLM-5.3</td><td>glm-5.3</td></tr></tbody></table>`;
   const glm53 = {
     ...models[0], id: 'glm-5.3', label: 'GLM-5.3', author: 'Zhipu', hue: '#0CA678',
     ocCostPerM: 4.4, ocCost: { input: 1.4, output: 4.4, cached: 0.26 },
     aa: { name: 'GLM-5.3 (max)', intelligenceIndex: 59.51, effort: 'max', url: 'https://artificialanalysis.ai/models/glm-5-3' },
   };
   const full = [...models, glm53, noiseModel()];
-  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedGoHtml: goHtml });
+  // roster arrives as worker /curated ids (docs scraped server-side)
+  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedIds: [...models.map((m) => m.id), 'glm-5.3'] });
   await env.sb.settle();
   assert.ok(dotOf(env, 'glm-5.3'), 'glm-5.3 is on the Go table → must be plotted');
   assert.equal(dotOf(env, 'claude-fable-5'), undefined, 'off-table models stay hidden');
