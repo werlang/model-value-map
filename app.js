@@ -136,6 +136,7 @@
     // harmless (they match nothing) and pruning would resurrect models the
     // user hid if they temporarily leave the roster.
     recompute();
+    applyFrontierDefault();
     renderExcluded();
     renderToggles();
     updateTable();
@@ -172,6 +173,23 @@
   }
   function saveHidden() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify([...hidden])); } catch { /* private mode */ }
+  }
+
+  // First-run default: with no stored hide-list at all, start frontier-only
+  // so a new user meets the value line instead of the full cloud. Any
+  // explicit toggle (even "All", which stores []) records a preference and
+  // permanently retires the default. Bar pages have no frontier, so they
+  // always start fully visible.
+  let autoFrontier = false;
+  try { autoFrontier = !BAR_MODE && localStorage.getItem(STORE_KEY) == null; }
+  catch { autoFrontier = false; }
+
+  function applyFrontierDefault() {
+    if (!autoFrontier || BAR_MODE || !plotted.length) return;
+    const ids = new Set(frontierOf(plotted).map((m) => m.id));
+    hidden.clear();
+    plotted.forEach((m) => { if (!ids.has(m.id)) hidden.add(m.id); });
+    saveHidden();
   }
 
   // ---------- x-axis scale (log | linear) ----------
@@ -932,7 +950,7 @@
       if (chipBtn) {
         const id = chipBtn.dataset.chip;
         hidden.has(id) ? hidden.delete(id) : hidden.add(id);
-        saveHidden(); render(); return;
+        autoFrontier = false; saveHidden(); render(); return;
       }
       const labBtn = e.target.closest('[data-lab-toggle]');
       if (labBtn) {
@@ -940,7 +958,7 @@
         const ids = byLab.get(lab).map((m) => m.id);
         const anyOn = ids.some((id) => !hidden.has(id));
         ids.forEach((id) => (anyOn ? hidden.add(id) : hidden.delete(id)));
-        saveHidden(); render();
+        autoFrontier = false; saveHidden(); render();
       }
     });
 
@@ -979,7 +997,7 @@
         hidden.clear();
         plotted.forEach((m) => { if (!f.includes(m)) hidden.add(m.id); });
       }
-      saveHidden(); render();
+      autoFrontier = false; saveHidden(); render();
     });
   }
 
@@ -1104,6 +1122,7 @@
       // absent from the list so they start visible; stale ids match nothing.
       activeId = null;
       recompute();
+      applyFrontierDefault();
       renderExcluded();
       renderToggles();
       updateTable();
@@ -1124,6 +1143,7 @@
   // ---------- boot ----------
   normalizeCompanyHues();
   recompute();
+  applyFrontierDefault();
   renderExcluded();
   renderToggles();
   hideBarInapplicableControls();

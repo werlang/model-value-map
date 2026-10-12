@@ -16,6 +16,10 @@ function page(over = {}) {
   const env = standardEnv({
     loadApp: true,
     snapshot: models,
+    // Most tests exercise rendering mechanics, not first-run behavior, so
+    // they boot as returning users (explicit all-visible preference). New
+    // users get frontier-only — covered by dedicated tests below.
+    storage: returningStorage(),
     ...over,
   });
   return env;
@@ -29,6 +33,9 @@ async function bootOffline(over = {}) {
 
 const dotsOf = (env) => [...env.sb.el('chart-holder').querySelectorAll('.dot-point')];
 const dotOf = (env, id) => dotsOf(env).find((d) => d.dataset.id === id);
+// Returning user: explicit all-visible preference stored, so the
+// frontier-only first-run default stays out of the way.
+const returningStorage = () => makeStorage({ 'mvm.hidden.v1': JSON.stringify([]) });
 
 // ---------- boot & static render ----------
 
@@ -171,7 +178,7 @@ test('boot produces no console errors', async () => {
 // ---------- toggling ----------
 
 test('clicking a chip hides the dot, recomputes the frontier, and persists', async () => {
-  const storage = makeStorage();
+  const storage = returningStorage();
   const env = await bootOffline({ storage });
   const chip = env.sb.el('toggles').querySelector('[data-chip="kimi-k3"]');
   chip.dispatch('click', { target: chip });
@@ -201,7 +208,7 @@ test('lab rows toggle every model of an author at once', async () => {
 });
 
 test('quick actions: none → empty state, all → restore, frontier → members only', async () => {
-  const storage = makeStorage();
+  const storage = returningStorage();
   const env = await bootOffline({ storage });
   const act = (name) => env.sb.document.querySelector(`[data-action="${name}"]`);
 
@@ -227,6 +234,45 @@ test('hidden models survive a reload via localStorage', async () => {
   const env = await bootOffline({ storage });
   assert.equal(dotOf(env, 'kimi-k3'), undefined);
   assert.equal(env.sb.el('toggles').querySelector('[data-chip="kimi-k3"]').getAttribute('aria-pressed'), 'false');
+});
+
+test('new users with no stored preference default to frontier-only', async () => {
+  const storage = makeStorage(); // no hide-list at all: first run
+  const env = await bootOffline({ storage });
+  assert.deepEqual(dotsOf(env).map((d) => d.dataset.id).sort(),
+    ['glm-5.3', 'kimi-k3', 'mimo-v2.5']);
+  assert.equal(dotOf(env, 'kimi-k2.7-code'), undefined);
+  assert.equal(env.sb.el('toggles').querySelector('[data-chip="kimi-k2.7-code"]').getAttribute('aria-pressed'), 'false');
+  assert.equal(
+    env.sb.el('visible-count').textContent,
+    '3 of 4 plotted · frontier has 3 models · toggling redraws it',
+  );
+  // the default is recorded, so a reload keeps it instead of re-deriving
+  assert.deepEqual(JSON.parse(storage.getItem('mvm.hidden.v1')), ['kimi-k2.7-code']);
+});
+
+test('a new user tapping All records the preference and reloads with everything visible', async () => {
+  const storage = makeStorage();
+  const env = await bootOffline({ storage });
+  assert.equal(dotsOf(env).length, 3); // frontier-only default
+
+  const act = (name) => env.sb.document.querySelector(`[data-action="${name}"]`);
+  act('all').dispatch('click', { target: act('all') });
+  assert.equal(dotsOf(env).length, 4);
+  assert.deepEqual(JSON.parse(storage.getItem('mvm.hidden.v1')), []);
+
+  const later = await bootOffline({ storage });
+  assert.equal(dotsOf(later).length, 4, 'stored [] is a preference: no re-default');
+});
+
+test('the frontier-only default tracks live data until the user interacts', async () => {
+  const storage = makeStorage();
+  const env = curatedPage({ storage });
+  await env.sb.settle();
+  // live roster replaces the snapshot; untouched new users follow its frontier
+  assert.ok(env.sb.el('stamp').classList.contains('live'));
+  assert.equal(dotOf(env, 'kimi-k2.7-code'), undefined);
+  assert.ok(dotOf(env, 'kimi-k3'));
 });
 
 test('keyboard focus drives the readout; blur keeps the last selection sticky', async () => {
@@ -403,7 +449,7 @@ function noiseModel() {
 function curatedPage(over = {}) {
   const models = over.models ?? fullSnapshot();
   const full = [...models, noiseModel()];
-  return standardEnv({ loadApp: true, snapshot: models, workerModels: full, ...over });
+  return standardEnv({ loadApp: true, snapshot: models, workerModels: full, storage: returningStorage(), ...over });
 }
 
 test('boot filters the full worker roster down to the Go table set', async () => {
@@ -451,7 +497,7 @@ test('every model on the Go table shows, even ones absent from Zen (e.g. glm-5.3
   };
   const full = [...models, glm53, noiseModel()];
   // roster arrives as worker /curated ids (docs scraped server-side)
-  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedIds: [...models.map((m) => m.id), 'glm-5.3'] });
+  const env = standardEnv({ loadApp: true, snapshot: models, workerModels: full, curatedIds: [...models.map((m) => m.id), 'glm-5.3'], storage: returningStorage() });
   await env.sb.settle();
   assert.ok(dotOf(env, 'glm-5.3'), 'glm-5.3 is on the Go table → must be plotted');
   assert.equal(dotOf(env, 'claude-fable-5'), undefined, 'off-table models stay hidden');
