@@ -210,6 +210,7 @@ export const PAGE_SKELETON = `
     <button type="button" class="action" data-action="none">None</button>
     <button type="button" class="action" data-action="frontier">Frontier only</button>
   </div>
+  <button type="button" class="action" id="scale-toggle" aria-pressed="false">X: Log</button>
   <div class="chart-holder" id="chart-holder">
     <div class="chart-loading" id="chart-loading" aria-hidden="true">
       <svg class="chart-spinner" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -219,6 +220,7 @@ export const PAGE_SKELETON = `
       <span class="chart-loading-text">Fetching live data…</span>
     </div>
   </div>
+  <p class="axis-note">X is log-scaled</p>
   <div id="readout"></div>
   <ul class="excluded-list" id="excluded-list"></ul>
   <section class="toggles-panel">

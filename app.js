@@ -62,6 +62,34 @@
     tMax = tokenCounts.length ? Math.max(1, ...tokenCounts) : 1;
   }
 
+  // One hue per company: cached or snapshot payloads may carry mixed hues
+  // inside a single author group (creatorColor for some models, fallback for
+  // others). Collapse each group to its most common hue so every chip, dot
+  // and readout swatch for a company shares one color. Tie-break is
+  // first-seen, so the result is stable across renders.
+  function normalizeCompanyHues() {
+    const groups = new Map();
+    for (const m of MODELS) {
+      const key = (m.author && String(m.author).trim()) || 'Other';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
+    }
+    for (const [, list] of groups) {
+      const counts = new Map();
+      for (const m of list) {
+        const h = m.hue || '#3B5BDB';
+        counts.set(h, (counts.get(h) || 0) + 1);
+      }
+      let best = null, bestN = -1;
+      for (const m of list) {
+        const h = m.hue || '#3B5BDB';
+        const n = counts.get(h);
+        if (n > bestN) { bestN = n; best = h; }
+      }
+      if (best) for (const m of list) m.hue = best;
+    }
+  }
+
   // ---------- bar-chart dataset (free-roster pages) ----------
   function scoreOf(m) {
     return (m.aa && typeof m.aa.intelligenceIndex === 'number' && Number.isFinite(m.aa.intelligenceIndex))
@@ -104,9 +132,9 @@
       }
     }
     curatedSet = expanded;
-    // prune hidden to available
-    const availIds = new Set(availableModels().map((mm) => mm.id));
-    for (const hid of [...hidden]) if (!availIds.has(hid)) hidden.delete(hid);
+    // hidden is the persisted hide-list — never prune it here. Stale ids are
+    // harmless (they match nothing) and pruning would resurrect models the
+    // user hid if they temporarily leave the roster.
     recompute();
     renderExcluded();
     renderToggles();
@@ -134,35 +162,91 @@
   function loadHidden() {
     try {
       const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
-      return Array.isArray(raw) ? raw.filter((id) => MODELS.some((m) => m.id === id)) : [];
+      // Persisted hide-list: keep every stored id so a reload restores the
+      // exact toggle state. New models start visible because they are absent
+      // from this list; stale ids are harmless (they match nothing).
+      return Array.isArray(raw)
+        ? raw.filter((id) => typeof id === 'string' && id.length > 0 && id.length <= 120)
+        : [];
     } catch { return []; }
   }
   function saveHidden() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify([...hidden])); } catch { /* private mode */ }
   }
 
+  // ---------- x-axis scale (log | linear) ----------
+  const XSCALE_KEY = BAR_MODE ? null : 'mvm.xscale.v1';
+  let xScale = loadXScale();
+  function loadXScale() {
+    try {
+      const raw = XSCALE_KEY ? localStorage.getItem(XSCALE_KEY) : null;
+      return raw === 'linear' ? 'linear' : 'log';
+    } catch { return 'log'; }
+  }
+  function saveXScale() {
+    try { if (XSCALE_KEY) localStorage.setItem(XSCALE_KEY, xScale); } catch { /* private mode */ }
+  }
+
   // ---------- scales ----------
   const M = { top: 26, right: 24, bottom: 44, left: 52 };
-  const X_TICK_CANDIDATES = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+  const X_TICK_CANDIDATES = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200];
 
   const lx = (v) => Math.log10(v);
-  function makeScales(w, h, xDomain, yDomain) {
+  function makeScales(w, h, xDomain, yDomain, mode) {
     const iw = w - M.left - M.right;
     const ih = h - M.top - M.bottom;
-    const x = (v) => M.left + ((lx(v) - lx(xDomain[0])) / (lx(xDomain[1]) - lx(xDomain[0]))) * iw;
+    const m = mode || xScale || 'log';
+    let x;
+    if (m === 'linear') {
+      const span = (xDomain[1] - xDomain[0]) || 1;
+      x = (v) => M.left + ((v - xDomain[0]) / span) * iw;
+    } else {
+      x = (v) => M.left + ((lx(v) - lx(xDomain[0])) / (lx(xDomain[1]) - lx(xDomain[0]))) * iw;
+    }
     const y = (v) => M.top + ih - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * ih;
     return { x, y, iw, ih };
   }
 
-  // Domains derive from the plotted set so live data drift can't clip points,
-  // while staying stable across visibility toggles.
+  function linearTicks(lo, hi, count) {
+    const n = count || 6;
+    if (!(hi > lo)) return [lo];
+    const rawStep = (hi - lo) / Math.max(1, n - 1);
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const norm = rawStep / mag;
+    let nice;
+    if (norm < 1.5) nice = 1;
+    else if (norm < 3.5) nice = 2;
+    else if (norm < 7.5) nice = 5;
+    else nice = 10;
+    const step = nice * mag;
+    const start = Math.ceil(lo / step) * step;
+    const out = [];
+    for (let v = start; v <= hi + step * 0.5; v += step) {
+      // round to step precision to avoid 0.30000000004 ticks
+      const rounded = Math.round(v / step) * step;
+      out.push(+rounded.toFixed(6));
+      if (out.length >= 8) break;
+    }
+    return out.length ? out : [lo, hi];
+  }
+
+  // Domains derive from the currently visible set so the chart area stays
+  // filled as models are toggled — hiding the cheapest model pulls the left
+  // edge right, hiding the smartest pulls the top edge down.
   function computeDomains() {
-    if (!plotted.length) return { xd: [0.17, 18], yd: [35, 62], xt: [0.2, 0.5, 1, 2, 5, 10], yt: [35, 40, 45, 50, 55, 60] };
-    const xs = plotted.map((m) => m.ocCostPerM);
-    const ys = plotted.map((m) => m.aa.intelligenceIndex);
+    const vis = plotted.filter((m) => !hidden.has(m.id));
+    const use = vis.length ? vis : null;
+    if (!use) return { xd: [0.17, 18], yd: [35, 62], xt: [0.2, 0.5, 1, 2, 5, 10], yt: [35, 40, 45, 50, 55, 60] };
+    const xs = use.map((m) => m.ocCostPerM);
+    const ys = use.map((m) => m.aa.intelligenceIndex);
     const xd = [Math.min(...xs) / 1.4, Math.max(...xs) * 1.4];
     const yd = [Math.floor((Math.min(...ys) - 2) / 5) * 5, Math.ceil((Math.max(...ys) + 2) / 5) * 5];
-    const xt = X_TICK_CANDIDATES.filter((t) => t >= xd[0] && t <= xd[1]);
+    let xt;
+    if ((xScale || 'log') === 'linear') {
+      xt = linearTicks(xd[0], xd[1], 6);
+    } else {
+      xt = X_TICK_CANDIDATES.filter((t) => t >= xd[0] && t <= xd[1]);
+    }
     const yt = [];
     for (let v = yd[0]; v <= yd[1]; v += 5) yt.push(v);
     return { xd, yd, xt, yt };
@@ -241,11 +325,12 @@
     const w = Math.max(260, Math.round(holder.clientWidth) || 320);
     const h = holder.clientHeight > 100 ? holder.clientHeight : Math.round(Math.min(680, Math.max(380, w * 0.56)));
     const { xd, yd, xt, yt } = computeDomains();
-    const { x, y, iw, ih } = makeScales(w, h, xd, yd);
+    const { x, y, iw, ih } = makeScales(w, h, xd, yd, xScale);
 
     const visible = plotted.filter((m) => !hidden.has(m.id));
     const frontier = frontierOf(visible);
     const frontierIds = new Set(frontier.map((f) => f.id));
+    const scaleWord = (xScale || 'log') === 'linear' ? 'linear' : 'log';
 
     const NS = 'http://www.w3.org/2000/svg';
     svg = document.createElementNS(NS, 'svg');
@@ -255,7 +340,7 @@
     svg.setAttribute('class', 'chart-svg');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label',
-      `Scatter plot of ${visible.length} models. Horizontal axis: dollars per million tokens, log scale. Vertical axis: Artificial Analysis Intelligence Index.`);
+      `Scatter plot of ${visible.length} models. Horizontal axis: dollars per million tokens, ${scaleWord} scale. Vertical axis: Artificial Analysis Intelligence Index.`);
 
     // defs: hatch for dominated zone
     const defs = document.createElementNS(NS, 'defs');
@@ -392,6 +477,32 @@
     renderReadout(activeId ? MODELS.find((mm) => mm.id === activeId) : null, frontier);
     renderCount(visible.length, frontier.length);
     syncChips();
+    syncScaleUI();
+  }
+
+  function syncScaleUI() {
+    if (BAR_MODE) return;
+    const btn = document.getElementById('scale-toggle');
+    const isLinear = (xScale || 'log') === 'linear';
+    if (btn) {
+      btn.textContent = isLinear ? 'X: Linear' : 'X: Log';
+      btn.setAttribute('aria-pressed', isLinear ? 'true' : 'false');
+      btn.setAttribute('aria-label', isLinear
+        ? 'X axis is linear. Activate to switch to log scale.'
+        : 'X axis is log scale. Activate to switch to linear scale.');
+    }
+    const note = document.querySelector('.axis-note');
+    if (note) {
+      note.textContent = isLinear
+        ? 'X is linear · dot area ∝ tokens processed on OpenCode this month · labels show leaderboard rank'
+        : 'X is log-scaled · dot area ∝ tokens processed on OpenCode this month · labels show leaderboard rank';
+    }
+    const xTitle = svg ? svg.querySelector('.axis-title-x') : null;
+    if (xTitle) {
+      xTitle.textContent = isLinear
+        ? 'COST PER 1M TOKENS (USD, OPENCODE, LINEAR)'
+        : 'COST PER 1M TOKENS (USD, OPENCODE)';
+    }
   }
 
   function setActive(id, g, on) {
@@ -807,6 +918,15 @@
       });
     });
 
+    const scaleBtn = document.getElementById('scale-toggle');
+    if (scaleBtn) {
+      scaleBtn.addEventListener('click', () => {
+        xScale = (xScale || 'log') === 'log' ? 'linear' : 'log';
+        saveXScale();
+        render();
+      });
+    }
+
     togglesEl.addEventListener('click', (e) => {
       const chipBtn = e.target.closest('[data-chip]');
       if (chipBtn) {
@@ -974,12 +1094,14 @@
   function applyLiveResult(res) {
     if (res && res.models) {
       MODELS = res.models;
+      normalizeCompanyHues();
       if (res.meta && Array.isArray(res.meta.sources) && res.meta.sources.length && sourceLinksEl) {
         sourceLinksEl.innerHTML = res.meta.sources
           .map((s) => `<a href="${s.url}" target="_blank" rel="noopener">${esc(s.name)}</a>`)
           .join(' · ');
       }
-      for (const id of [...hidden]) if (!availableModels().some((m) => m.id === id)) hidden.delete(id);
+      // hidden is the persisted hide-list — never prune it. New models are
+      // absent from the list so they start visible; stale ids match nothing.
       activeId = null;
       recompute();
       renderExcluded();
@@ -1000,6 +1122,7 @@
   }
 
   // ---------- boot ----------
+  normalizeCompanyHues();
   recompute();
   renderExcluded();
   renderToggles();
@@ -1032,5 +1155,5 @@
 
   // Headless test seam: pure helpers only — nothing here captures DOM nodes
   // or mutable state, so exposing them has no effect on page behavior.
-  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, isCurated, availableModels, scoreOf, barRows, barUnscored };
+  window.MVM_TEST = { frontierOf, makeScales, esc, fmt$: fmt$, fmtCtx, isCurated, availableModels, scoreOf, barRows, barUnscored, computeDomains, linearTicks };
 })();

@@ -58,10 +58,13 @@
     <section id="chart-region" class="panel chart-panel" aria-label="Cost versus intelligence scatter plot">
       <div class="chart-head">
         <h2 class="panel-title">Cost per 1M tokens vs intelligence score</h2>
-        <div class="quick-actions" role="group" aria-label="Quick visibility filters">
-          <button type="button" class="action" data-action="all">All</button>
-          <button type="button" class="action" data-action="none">None</button>
-          <button type="button" class="action" data-action="frontier">Frontier only</button>
+        <div class="chart-head-actions">
+          <div class="quick-actions" role="group" aria-label="Quick visibility filters">
+            <button type="button" class="action" data-action="all">All</button>
+            <button type="button" class="action" data-action="none">None</button>
+            <button type="button" class="action" data-action="frontier">Frontier only</button>
+          </div>
+          <button type="button" class="action" id="scale-toggle" aria-pressed="false" title="Toggle X axis between log and linear scale">X: Log</button>
         </div>
       </div>
       <div class="chart-holder" id="chart-holder">

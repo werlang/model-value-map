@@ -141,11 +141,169 @@ function dashNorm(id) {
 }
 
 const FALLBACK_HUES = ['#3B5BDB', '#D9480F', '#0CA678', '#9C36B5', '#0C8599', '#C2255C', '#6741D9', '#E8890C', '#2F9E44'];
+// Extra distinct hues used only when two different companies hash to the same
+// fallback hue — the first company keeps its hash color, the rest take from
+// here in sorted-company order so every company stays distinguishable.
+const EXTRA_HUES = ['#7048E8', '#F59F00', '#0B7285', '#A61E4D', '#5C940D', '#E67700', '#1098AD', '#D6336C', '#3B82F6', '#F43F5E', '#8B5CF6', '#66D9E8'];
 function hueFor(author) {
   let h = 0;
   const str = author || '';
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
   return FALLBACK_HUES[h % FALLBACK_HUES.length];
+}
+
+// ---------- company normalization (one color per company) ----------
+// AA creator names vary in spelling ("Moonshot AI" vs "Kimi", "Zhipu" vs
+// "Z AI") and roster models missing a score arrive with author null. Without
+// normalization the same company renders in two colors or two companies share
+// one color. Canonicalize first, then collapse each company to a single hue.
+const AUTHOR_ALIASES = {
+  'moonshot': 'Kimi',
+  'moonshot ai': 'Kimi',
+  'kimi': 'Kimi',
+  'zhipu': 'Z AI',
+  'zhipuai': 'Z AI',
+  'z.ai': 'Z AI',
+  'z ai': 'Z AI',
+  'nvidia': 'NVIDIA',
+  'minimax': 'MiniMax',
+  'minimax ai': 'MiniMax',
+  'deepseek': 'DeepSeek',
+  'alibaba': 'Alibaba',
+  'qwen': 'Alibaba',
+  'openai': 'OpenAI',
+  'anthropic': 'Anthropic',
+  'google': 'Google',
+  'meta': 'Meta',
+  'mistral': 'Mistral',
+  'mistral ai': 'Mistral',
+  'cohere': 'Cohere',
+  'xiaomi': 'Xiaomi',
+  'microsoft': 'Microsoft',
+  'amazon': 'Amazon',
+  'perplexity': 'Perplexity',
+  'xai': 'xAI',
+  'spacexai': 'xAI',
+  'spacex ai': 'xAI',
+  'stepfun': 'StepFun',
+  'step-fun': 'StepFun',
+  'upstage': 'Upstage',
+  'inception': 'Inception',
+  'inclusionai': 'InclusionAI',
+  'inclusion ai': 'InclusionAI',
+  'nous research': 'Nous Research',
+  'thinking machines': 'Thinking Machines',
+  'apodex': 'Apodex',
+  'sarvam': 'Sarvam',
+  'sarvam ai': 'Sarvam',
+  'poolside': 'Poolside',
+  'liquidai': 'LiquidAI',
+  'liquid ai': 'LiquidAI',
+  'dots studio': 'Dots Studio',
+  'openrouter': 'OpenRouter',
+  'nex agi': 'Nex AGI',
+};
+function canonicalAuthor(name) {
+  if (!name || typeof name !== 'string') return null;
+  const t = name.trim();
+  if (!t) return null;
+  const low = t.toLowerCase();
+  if (AUTHOR_ALIASES[low]) return AUTHOR_ALIASES[low];
+  return t;
+}
+function inferAuthorFromId(id) {
+  const s = String(id || '').toLowerCase();
+  if (!s) return null;
+  if (s.startsWith('deepseek-')) return 'DeepSeek';
+  if (s.startsWith('kimi-')) return 'Kimi';
+  if (s.startsWith('qwen')) return 'Alibaba';
+  if (s.startsWith('claude-')) return 'Anthropic';
+  if (s.startsWith('gpt-') || s === 'o1' || s.startsWith('o1-') || s.startsWith('o3-')) return 'OpenAI';
+  if (s.startsWith('gemini-') || s.startsWith('gemma-')) return 'Google';
+  if (s.startsWith('glm-')) return 'Z AI';
+  if (s.startsWith('mimo-')) return 'Xiaomi';
+  if (s.startsWith('minimax-')) return 'MiniMax';
+  if (s.startsWith('muse-')) return 'Meta';
+  if (s.startsWith('grok-')) return 'xAI';
+  if (s.startsWith('mistral-') || s.startsWith('devstral-') || s.startsWith('magistral-')) return 'Mistral';
+  if (s.startsWith('command-') || s.startsWith('north-')) return 'Cohere';
+  if (s.startsWith('nova-')) return 'Amazon';
+  if (s.startsWith('phi-')) return 'Microsoft';
+  if (s.startsWith('sonar-')) return 'Perplexity';
+  if (s.startsWith('solar-')) return 'Upstage';
+  if (s.startsWith('step-')) return 'StepFun';
+  if (s.startsWith('mercury-')) return 'Inception';
+  if (s.startsWith('ling-')) return 'InclusionAI';
+  if (s.startsWith('hermes-')) return 'Nous Research';
+  if (s.startsWith('inkling')) return 'Thinking Machines';
+  if (s.startsWith('sarvam-')) return 'Sarvam';
+  if (s.startsWith('laguna-')) return 'Poolside';
+  if (s.startsWith('nemotron-') || s.startsWith('nvidia')) return 'NVIDIA';
+  return null;
+}
+function companyKeyFor(m) {
+  const canon = canonicalAuthor(m && m.author);
+  if (canon) return canon;
+  const inferred = inferAuthorFromId(m && (m.id || m.orId));
+  if (inferred) return inferred;
+  return (m && m.author) || 'Unknown';
+}
+// Collapse each company's models to one hue: prefer the most common true
+// creatorColor (official brand color) when any model carries one, else the
+// hash of the canonical name. Then resolve cross-company fallback collisions
+// so two companies never share a color.
+function normalizeAuthorsAndHues(out) {
+  if (!Array.isArray(out) || !out.length) return out;
+  const groups = new Map();
+  for (const m of out) {
+    const key = companyKeyFor(m);
+    const canon = canonicalAuthor(m.author) || inferAuthorFromId(m.id || m.orId) || m.author || 'Unknown';
+    m.author = canon || key;
+    const gkey = m.author || 'Unknown';
+    if (!groups.has(gkey)) groups.set(gkey, []);
+    groups.get(gkey).push(m);
+  }
+  const isFallback = (h) => FALLBACK_HUES.includes(h);
+  for (const [, list] of groups) {
+    const brandCounts = new Map();
+    for (const m of list) {
+      const h = m.hue;
+      if (h && !isFallback(h)) brandCounts.set(h, (brandCounts.get(h) || 0) + 1);
+    }
+    let best = null;
+    if (brandCounts.size) {
+      let bestN = -1;
+      for (const m of list) {
+        const n = brandCounts.get(m.hue) || 0;
+        if (n > bestN) { bestN = n; best = m.hue; }
+      }
+    } else {
+      best = hueFor(list[0].author);
+    }
+    if (best) for (const m of list) m.hue = best;
+  }
+  // cross-company collisions on fallback hues → reassign in sorted order
+  const used = new Map(); // hue -> company
+  const sortedCompanies = [...groups.keys()].sort((a, b) => String(a).localeCompare(String(b)));
+  let extraIdx = 0;
+  for (const company of sortedCompanies) {
+    const list = groups.get(company);
+    if (!list || !list.length) continue;
+    const h = list[0].hue;
+    if (!isFallback(h)) { used.set(h, company); continue; }
+    if (!used.has(h)) { used.set(h, company); continue; }
+    // collision: find next unused hue (fallback first, then extras)
+    const candidates = [...FALLBACK_HUES, ...EXTRA_HUES];
+    let replacement = null;
+    for (const c of candidates) {
+      if (!used.has(c)) { replacement = c; break; }
+    }
+    if (replacement) {
+      for (const m of list) m.hue = replacement;
+      used.set(replacement, company);
+    }
+  }
+  return out;
 }
 
 // ---------- AA keyless parsing (inert text — never executed) ----------
@@ -707,7 +865,7 @@ function buildOpenRouterFreeModels(orList, aaMap) {
     if (sb !== sa) return sb - sa;
     return String(a.label).localeCompare(String(b.label));
   });
-  return out;
+  return normalizeAuthorsAndHues(out);
 }
 
 function buildModels(mdMap, aaMap, curatedDocsIds) {
@@ -873,7 +1031,7 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
     seen.add(emitId); seen.add(normSlug(emitId)); seen.add(dashNorm(emitId));
   }
 
-  return out;
+  return normalizeAuthorsAndHues(out);
 }
 
 async function fetchAaAll(env) {
@@ -1146,5 +1304,9 @@ export const __TEST__ = {
   orBaseId,
   orDisplayName,
   resolveAaMatchForOc,
+  canonicalAuthor,
+  inferAuthorFromId,
+  normalizeAuthorsAndHues,
+  hueFor,
   __AA_SLUG: AA_SLUG,
 };

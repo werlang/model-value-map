@@ -272,6 +272,19 @@ body {
   flex-wrap: wrap;
 }
 
+.chart-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#scale-toggle[aria-pressed="true"] {
+  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
 .axis-note {
   margin: 6px 2px 4px;
   font-family: var(--mono);
@@ -972,6 +985,13 @@ body {
     text-align: center;
     justify-content: center;
     padding: 5px 8px;
+  }
+  .chart-head-actions {
+    width: 100%;
+  }
+  #scale-toggle {
+    flex: 1 1 auto;
+    text-align: center;
   }
   .chart-loading {
     top: 8px;
