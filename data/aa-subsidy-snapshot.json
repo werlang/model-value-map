@@ -1,0 +1,1011 @@
+{
+  "source": "https://artificialanalysis.ai/models",
+  "collected_at": "2026-11-23",
+  "notes": "Inert-parsed Artificial Analysis model index: intelligenceIndex and intelligenceIndexCostPerTask.cost.total. costPerTask is null when AA publishes none. modelsDev is a base-tier fallback slice for offline api_cost.",
+  "models": [
+    {
+      "slug": "mimo-v2-6-pro",
+      "name": "MiMo-V2.6-Pro",
+      "creator": "Xiaomi",
+      "creatorSlug": "xiaomi",
+      "intelligenceIndex": 29.8898,
+      "costPerTask": 0.2572,
+      "url": "https://artificialanalysis.ai/models/mimo-v2-6-pro"
+    },
+    {
+      "slug": "claude-opus-5-5",
+      "name": "Claude Opus 5.5 (Max, Default Fallback)",
+      "creator": "Anthropic",
+      "creatorSlug": "anthropic",
+      "intelligenceIndex": 59.106,
+      "costPerTask": 10.0364,
+      "url": "https://artificialanalysis.ai/models/claude-opus-5-5"
+    },
+    {
+      "slug": "ling-3-1-flash",
+      "name": "Ling 3.1 Flash 1019",
+      "creator": "InclusionAI",
+      "creatorSlug": "inclusionai",
+      "intelligenceIndex": 29.5701,
+      "costPerTask": 3.1851,
+      "url": "https://artificialanalysis.ai/models/ling-3-1-flash"
+    },
+    {
+      "slug": "claude-fable-5-2",
+      "name": "Claude Fable 5.2 (Max, Default Fallback)",
+      "creator": "Anthropic",
+      "creatorSlug": "anthropic",
+      "intelligenceIndex": 64.5636,
+      "costPerTask": 26.5386,
+      "url": "https://artificialanalysis.ai/models/claude-fable-5-2"
+    },
+    {
+      "slug": "grok-4-7",
+      "name": "Grok 4.7 (Xhigh)",
+      "creator": "SpaceXAI",
+      "creatorSlug": "xai",
+      "intelligenceIndex": 35.485,
+      "costPerTask": 7.7715,
+      "url": "https://artificialanalysis.ai/models/grok-4-7"
+    },
+    {
+      "slug": "kimi-k3-1-pro",
+      "name": "Kimi K3.1 Pro",
+      "creator": "Kimi",
+      "creatorSlug": "kimi",
+      "intelligenceIndex": 46.4526,
+      "costPerTask": 3.6812,
+      "url": "https://artificialanalysis.ai/models/kimi-k3-1-pro"
+    },
+    {
+      "slug": "reflection-beam",
+      "name": "Beam 1.0",
+      "creator": "Reflection",
+      "creatorSlug": "reflection",
+      "intelligenceIndex": 17.7307,
+      "costPerTask": 0.2844,
+      "url": "https://artificialanalysis.ai/models/reflection-beam"
+    },
+    {
+      "slug": "gpt-6-luna",
+      "name": "GPT-6 Luna (Max)",
+      "creator": "OpenAI",
+      "creatorSlug": "openai",
+      "intelligenceIndex": 27.8552,
+      "costPerTask": 0.152,
+      "url": "https://artificialanalysis.ai/models/gpt-6-luna"
+    },
+    {
+      "slug": "gpt-6-2-astra",
+      "name": "GPT-6.2 Astra (Max)",
+      "creator": "OpenAI",
+      "creatorSlug": "openai",
+      "intelligenceIndex": 62.1388,
+      "costPerTask": 3.9979,
+      "url": "https://artificialanalysis.ai/models/gpt-6-2-astra"
+    },
+    {
+      "slug": "gemini-4-neon",
+      "name": "Gemini 4 Neon (Xhigh)",
+      "creator": "Google",
+      "creatorSlug": "google",
+      "intelligenceIndex": 61.3982,
+      "costPerTask": 6.4448,
+      "url": "https://artificialanalysis.ai/models/gemini-4-neon"
+    },
+    {
+      "slug": "claude-haiku-5-5",
+      "name": "Claude Haiku 5.5 (Max)",
+      "creator": "Anthropic",
+      "creatorSlug": "anthropic",
+      "intelligenceIndex": 36.4845,
+      "costPerTask": 0.411,
+      "url": "https://artificialanalysis.ai/models/claude-haiku-5-5"
+    },
+    {
+      "slug": "gemini-4-carbon",
+      "name": "Gemini 4 Carbon (High)",
+      "creator": "Google",
+      "creatorSlug": "google",
+      "intelligenceIndex": 60.0257,
+      "costPerTask": 7.7555,
+      "url": "https://artificialanalysis.ai/models/gemini-4-carbon"
+    },
+    {
+      "slug": "gpt-6-2-sol",
+      "name": "GPT-6.2 Sol (Max)",
+      "creator": "OpenAI",
+      "creatorSlug": "openai",
+      "intelligenceIndex": 57.2576,
+      "costPerTask": 1.0144,
+      "url": "https://artificialanalysis.ai/models/gpt-6-2-sol"
+    },
+    {
+      "slug": "qwen3-8-27b",
+      "name": "Qwen3.8 27B (Xhigh)",
+      "creator": "Alibaba",
+      "creatorSlug": "alibaba",
+      "intelligenceIndex": 20.1069,
+      "costPerTask": 3.5295,
+      "url": "https://artificialanalysis.ai/models/qwen3-8-27b"
+    },
+    {
+      "slug": "gpt-6-1-terra",
+      "name": "GPT-6.1 Terra (Max)",
+      "creator": "OpenAI",
+      "creatorSlug": "openai",
+      "intelligenceIndex": 51.3265,
+      "costPerTask": 0.9611,
+      "url": "https://artificialanalysis.ai/models/gpt-6-1-terra"
+    },
+    {
+      "slug": "claude-sonnet-5-5",
+      "name": "Claude Sonnet 5.5 (Max, Default Fallback)",
+      "creator": "Anthropic",
+      "creatorSlug": "anthropic",
+      "intelligenceIndex": 54.5413,
+      "costPerTask": 10.0206,
+      "url": "https://artificialanalysis.ai/models/claude-sonnet-5-5"
+    },
+    {
+      "slug": "k2-horizon-375b-a23b",
+      "name": "K2 Horizon 375B A23B",
+      "creator": "Institute of Foundation Models",
+      "creatorSlug": "ifm",
+      "intelligenceIndex": 17.8203,
+      "costPerTask": null,
+      "url": "https://artificialanalysis.ai/models/k2-horizon-375b-a23b"
+    },
+    {
+      "slug": "glm-5-3",
+      "name": "GLM-5.3 (Max)",
+      "creator": "Z AI",
+      "creatorSlug": "zai",
+      "intelligenceIndex": 31.6534,
+      "costPerTask": 5.0093,
+      "url": "https://artificialanalysis.ai/models/glm-5-3"
+    },
+    {
+      "slug": "tencent-hy4",
+      "name": "Tencent Hy4",
+      "creator": "Tencent",
+      "creatorSlug": "tencent",
+      "intelligenceIndex": 34.5552,
+      "costPerTask": 1.0311,
+      "url": "https://artificialanalysis.ai/models/tencent-hy4"
+    },
+    {
+      "slug": "gemini-4-hydrogen",
+      "name": "Gemini 4 Hydrogen (Xhigh)",
+      "creator": "Google",
+      "creatorSlug": "google",
+      "intelligenceIndex": 53.9192,
+      "costPerTask": 3.1602,
+      "url": "https://artificialanalysis.ai/models/gemini-4-hydrogen"
+    },
+    {
+      "slug": "muse-ember",
+      "name": "Muse Ember (Max)",
+      "creator": "Meta",
+      "creatorSlug": "meta",
+      "intelligenceIndex": 36.0213,
+      "costPerTask": 0.1359,
+      "url": "https://artificialanalysis.ai/models/muse-ember"
+    },
+    {
+      "slug": "nemotron-3-5-super-vl",
+      "name": "Nemotron 3.5 Super VL",
+      "creator": "NVIDIA",
+      "creatorSlug": "nvidia",
+      "intelligenceIndex": 13.6203,
+      "costPerTask": 0.4818,
+      "url": "https://artificialanalysis.ai/models/nemotron-3-5-super-vl"
+    },
+    {
+      "slug": "inkling-2-small",
+      "name": "Inkling 2 Small",
+      "creator": "Thinking Machines",
+      "creatorSlug": "thinking-machines",
+      "intelligenceIndex": 30.6287,
+      "costPerTask": 1.1784,
+      "url": "https://artificialanalysis.ai/models/inkling-2-small"
+    },
+    {
+      "slug": "muse-wonder-full",
+      "name": "Muse Wonder Full (Max)",
+      "creator": "Meta",
+      "creatorSlug": "meta",
+      "intelligenceIndex": 50.0772,
+      "costPerTask": null,
+      "url": "https://artificialanalysis.ai/models/muse-wonder-full"
+    },
+    {
+      "slug": "mistral-large-4",
+      "name": "Mistral Large 4 (High)",
+      "creator": "Mistral",
+      "creatorSlug": "mistral",
+      "intelligenceIndex": 26.125,
+      "costPerTask": 2.0617,
+      "url": "https://artificialanalysis.ai/models/mistral-large-4"
+    },
+    {
+      "slug": "deepseek-v4-1-flash-1017",
+      "name": "DeepSeek V4.1 Flash 1017 (Max)",
+      "creator": "DeepSeek",
+      "creatorSlug": "deepseek",
+      "intelligenceIndex": 32.5896,
+      "costPerTask": 0.6021,
+      "url": "https://artificialanalysis.ai/models/deepseek-v4-1-flash-1017"
+    },
+    {
+      "slug": "qwen4-max",
+      "name": "Qwen4 Max",
+      "creator": "Alibaba",
+      "creatorSlug": "alibaba",
+      "intelligenceIndex": 42.8915,
+      "costPerTask": 3.2681,
+      "url": "https://artificialanalysis.ai/models/qwen4-max"
+    },
+    {
+      "slug": "muse-wonder",
+      "name": "Muse Wonder (Max)",
+      "creator": "Meta",
+      "creatorSlug": "meta",
+      "intelligenceIndex": 43.5748,
+      "costPerTask": 6.952,
+      "url": "https://artificialanalysis.ai/models/muse-wonder"
+    }
+  ],
+  "modelsDev": {
+    "anthropic": {
+      "name": "Anthropic",
+      "models": {
+        "claude-fable-5-1": {
+          "name": "Claude Fable 5.1",
+          "input": 10,
+          "output": 50
+        },
+        "claude-opus-5": {
+          "name": "Claude Opus 5",
+          "input": 5,
+          "output": 25
+        },
+        "claude-sonnet-4-6": {
+          "name": "Claude Sonnet 4.6",
+          "input": 3,
+          "output": 15
+        },
+        "claude-haiku-5-5": {
+          "name": "Claude Haiku 5.5",
+          "input": 0.1,
+          "output": 0.5
+        },
+        "claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
+          "input": 8,
+          "output": 40
+        },
+        "claude-opus-4-6": {
+          "name": "Claude Opus 4.6",
+          "input": 5,
+          "output": 25
+        },
+        "claude-opus-4-7": {
+          "name": "Claude Opus 4.7",
+          "input": 5,
+          "output": 25
+        },
+        "claude-sonnet-5": {
+          "name": "Claude Sonnet 5",
+          "input": 2,
+          "output": 10
+        },
+        "claude-sonnet-5-5": {
+          "name": "Claude Sonnet 5.5",
+          "input": 2,
+          "output": 10
+        },
+        "claude-opus-4-5-20251101": {
+          "name": "Claude Opus 4.5",
+          "input": 5,
+          "output": 25
+        },
+        "claude-opus-4-5": {
+          "name": "Claude Opus 4.5 (latest)",
+          "input": 5,
+          "output": 25
+        },
+        "claude-opus-4-8": {
+          "name": "Claude Opus 4.8",
+          "input": 5,
+          "output": 25
+        },
+        "claude-haiku-4-5-20251001": {
+          "name": "Claude Haiku 4.5",
+          "input": 1,
+          "output": 5
+        },
+        "claude-haiku-4-5": {
+          "name": "Claude Haiku 4.5 (latest)",
+          "input": 1,
+          "output": 5
+        },
+        "claude-fable-5": {
+          "name": "Claude Fable 5",
+          "input": 10,
+          "output": 50
+        },
+        "claude-opus-5-5": {
+          "name": "Claude Opus 5.5",
+          "input": 4,
+          "output": 20
+        },
+        "claude-sonnet-4-5": {
+          "name": "Claude Sonnet 4.5 (latest)",
+          "input": 3,
+          "output": 15
+        },
+        "claude-sonnet-4-5-20250929": {
+          "name": "Claude Sonnet 4.5",
+          "input": 3,
+          "output": 15
+        }
+      }
+    },
+    "openai": {
+      "name": "OpenAI",
+      "models": {
+        "gpt-6.2-astra": {
+          "name": "GPT-6.2 Astra",
+          "input": 8,
+          "output": 40
+        },
+        "gpt-5-mini": {
+          "name": "GPT-5 Mini",
+          "input": 0.25,
+          "output": 2
+        },
+        "gpt-5.1": {
+          "name": "GPT-5.1",
+          "input": 1.25,
+          "output": 10
+        },
+        "text-embedding-3-large": {
+          "name": "text-embedding-3-large",
+          "input": 0.13,
+          "output": 0
+        },
+        "gpt-6-sol": {
+          "name": "GPT-6 Sol",
+          "input": 2,
+          "output": 10
+        },
+        "gpt-4o-2024-11-20": {
+          "name": "GPT-4o (2024-11-20)",
+          "input": 2.5,
+          "output": 10
+        },
+        "gpt-5.6-terra": {
+          "name": "GPT-5.6 Terra",
+          "input": 2,
+          "output": 12
+        },
+        "gpt-4o-2024-08-06": {
+          "name": "GPT-4o (2024-08-06)",
+          "input": 2.5,
+          "output": 10
+        },
+        "gpt-5.4-nano": {
+          "name": "GPT-5.4 nano",
+          "input": 0.2,
+          "output": 1.25
+        },
+        "gpt-4.1": {
+          "name": "GPT-4.1",
+          "input": 2,
+          "output": 8
+        },
+        "gpt-realtime-2.1": {
+          "name": "GPT-Realtime-2.1",
+          "input": 4,
+          "output": 24
+        },
+        "gpt-5.4-pro": {
+          "name": "GPT-5.4 Pro",
+          "input": 30,
+          "output": 180
+        },
+        "gpt-5.6": {
+          "name": "GPT-5.6",
+          "input": 4,
+          "output": 20
+        },
+        "gpt-6.2-sol": {
+          "name": "GPT-6.2 Sol",
+          "input": 2,
+          "output": 10
+        },
+        "gpt-5.5-pro": {
+          "name": "GPT-5.5 Pro",
+          "input": 30,
+          "output": 180
+        },
+        "text-embedding-ada-002": {
+          "name": "text-embedding-ada-002",
+          "input": 0.1,
+          "output": 0
+        },
+        "gpt-5.2": {
+          "name": "GPT-5.2",
+          "input": 1.75,
+          "output": 14
+        },
+        "gpt-5-pro": {
+          "name": "GPT-5 Pro",
+          "input": 15,
+          "output": 120
+        },
+        "text-embedding-3-small": {
+          "name": "text-embedding-3-small",
+          "input": 0.02,
+          "output": 0
+        },
+        "gpt-5.5": {
+          "name": "GPT-5.5",
+          "input": 5,
+          "output": 30
+        },
+        "gpt-5.4-mini": {
+          "name": "GPT-5.4 mini",
+          "input": 0.75,
+          "output": 4.5
+        },
+        "gpt-5.6-sol": {
+          "name": "GPT-5.6 Sol",
+          "input": 4,
+          "output": 20
+        },
+        "gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna",
+          "input": 0.2,
+          "output": 1.2
+        },
+        "o3-pro": {
+          "name": "o3-pro",
+          "input": 20,
+          "output": 80
+        },
+        "gpt-4o-mini": {
+          "name": "GPT-4o mini",
+          "input": 0.15,
+          "output": 0.6
+        },
+        "gpt-5.3-codex": {
+          "name": "GPT-5.3 Codex",
+          "input": 1.75,
+          "output": 14
+        },
+        "chatgpt-image-latest": {
+          "name": "chatgpt-image-latest",
+          "input": 5,
+          "output": 10
+        },
+        "gpt-5.4": {
+          "name": "GPT-5.4",
+          "input": 2.5,
+          "output": 15
+        },
+        "gpt-4o": {
+          "name": "GPT-4o",
+          "input": 2.5,
+          "output": 10
+        },
+        "gpt-5-nano": {
+          "name": "GPT-5 Nano",
+          "input": 0.05,
+          "output": 0.4
+        },
+        "gpt-daybreak-red-latest": {
+          "name": "Daybreak Red",
+          "input": 12.5,
+          "output": 75
+        },
+        "gpt-6.1-terra": {
+          "name": "GPT-6.1 Terra",
+          "input": 1,
+          "output": 5
+        },
+        "gpt-daybreak-blue-latest": {
+          "name": "Daybreak Blue",
+          "input": 4,
+          "output": 20
+        },
+        "gpt-5.2-pro": {
+          "name": "GPT-5.2 Pro",
+          "input": 21,
+          "output": 168
+        },
+        "gpt-6-luna": {
+          "name": "GPT-6 Luna",
+          "input": 0.1,
+          "output": 0.5
+        },
+        "gpt-image-1.5": {
+          "name": "gpt-image-1.5",
+          "input": 5,
+          "output": 10
+        },
+        "gpt-6.1-sol": {
+          "name": "GPT-6.1 Sol",
+          "input": 2,
+          "output": 10
+        },
+        "gpt-4.1-mini": {
+          "name": "GPT-4.1 mini",
+          "input": 0.4,
+          "output": 1.6
+        },
+        "o3": {
+          "name": "o3",
+          "input": 2,
+          "output": 8
+        },
+        "gpt-5": {
+          "name": "GPT-5",
+          "input": 1.25,
+          "output": 10
+        },
+        "gpt-6-astra": {
+          "name": "GPT-6 Astra",
+          "input": 10,
+          "output": 50
+        }
+      }
+    },
+    "google": {
+      "name": "Google",
+      "models": {
+        "gemini-2.5-flash-image": {
+          "name": "Nano Banana",
+          "input": 0.3,
+          "output": 2.5
+        },
+        "gemini-4-hydrogen": {
+          "name": "Gemini 4 Hydrogen",
+          "input": 1.5,
+          "output": 7.5
+        },
+        "gemini-3-flash-preview": {
+          "name": "Gemini 3 Flash Preview",
+          "input": 0.5,
+          "output": 3
+        },
+        "deep-research-preview-04-2026": {
+          "name": "Deep Research Preview (Apr-21-2026)",
+          "input": 2,
+          "output": 12
+        },
+        "gemma-4-26b-a4b-it": {
+          "name": "Gemma 4 26B A4B IT",
+          "input": 0,
+          "output": 0
+        },
+        "gemini-3.6-flash": {
+          "name": "Gemini 3.6 Flash",
+          "input": 0.75,
+          "output": 3.75
+        },
+        "gemini-flash-lite-latest": {
+          "name": "Gemini Flash-Lite Latest",
+          "input": 0.3,
+          "output": 2.5
+        },
+        "gemini-3.5-live-translate-preview": {
+          "name": "Gemini 3.5 Live Translate Preview",
+          "input": 3.5,
+          "output": 21
+        },
+        "gemini-3.7-flash": {
+          "name": "Gemini 3.7 Flash",
+          "input": 0.75,
+          "output": 3.75
+        },
+        "gemini-3.1-flash-lite-image": {
+          "name": "Nano Banana 2 Lite",
+          "input": 0.25,
+          "output": 1.5
+        },
+        "gemini-4-carbon": {
+          "name": "Gemini 4 Carbon",
+          "input": 2,
+          "output": 10
+        },
+        "gemini-3.5-flash-lite": {
+          "name": "Gemini 3.5 Flash Lite",
+          "input": 0.3,
+          "output": 2.5
+        },
+        "lyria-3-clip-preview": {
+          "name": "Lyria 3 Clip Preview",
+          "input": 0,
+          "output": 0
+        },
+        "gemini-pro-latest": {
+          "name": "Gemini Pro Latest",
+          "input": 2,
+          "output": 12
+        },
+        "gemini-3.1-flash-live-preview": {
+          "name": "Gemini 3.1 Flash Live Preview",
+          "input": 0.75,
+          "output": 4.5
+        },
+        "deep-research-max-preview-04-2026": {
+          "name": "Deep Research Max Preview (Apr-21-2026)",
+          "input": 2,
+          "output": 12
+        },
+        "gemini-flash-latest": {
+          "name": "Gemini Flash Latest",
+          "input": 0.75,
+          "output": 3.75
+        },
+        "gemini-3.1-flash-image": {
+          "name": "Nano Banana 2",
+          "input": 0.5,
+          "output": 3
+        },
+        "gemini-2.5-flash-preview-tts": {
+          "name": "Gemini 2.5 Flash Preview TTS",
+          "input": 0.5,
+          "output": 10
+        },
+        "gemini-2.5-flash-lite": {
+          "name": "Gemini 2.5 Flash-Lite",
+          "input": 0.1,
+          "output": 0.4
+        },
+        "gemini-3.1-flash-lite": {
+          "name": "Gemini 3.1 Flash Lite",
+          "input": 0.25,
+          "output": 1.5
+        },
+        "gemini-3.1-pro-preview": {
+          "name": "Gemini 3.1 Pro Preview",
+          "input": 2,
+          "output": 12
+        },
+        "gemini-3.1-flash-tts-preview": {
+          "name": "Gemini 3.1 Flash TTS Preview",
+          "input": 1,
+          "output": 20
+        },
+        "lyria-3-pro-preview": {
+          "name": "Lyria 3 Pro Preview",
+          "input": 0,
+          "output": 0
+        },
+        "gemini-3.8-flash": {
+          "name": "Gemini 3.8 Flash",
+          "input": 0.75,
+          "output": 3.75
+        },
+        "gemini-4-argon": {
+          "name": "Gemini 4 Argon",
+          "input": 2,
+          "output": 10
+        },
+        "gemini-4-neon": {
+          "name": "Gemini 4 Neon",
+          "input": 3,
+          "output": 15
+        },
+        "gemini-3-pro-image": {
+          "name": "Nano Banana Pro",
+          "input": 2,
+          "output": 12
+        },
+        "gemini-2.5-pro": {
+          "name": "Gemini 2.5 Pro",
+          "input": 1.25,
+          "output": 10
+        },
+        "gemini-2.5-flash": {
+          "name": "Gemini 2.5 Flash",
+          "input": 0.3,
+          "output": 2.5
+        },
+        "gemini-3.1-pro-preview-customtools": {
+          "name": "Gemini 3.1 Pro Preview Custom Tools",
+          "input": 2,
+          "output": 12
+        },
+        "gemini-embedding-001": {
+          "name": "Gemini Embedding 001",
+          "input": 0.15,
+          "output": 0
+        },
+        "gemini-2.5-pro-preview-tts": {
+          "name": "Gemini 2.5 Pro Preview TTS",
+          "input": 1,
+          "output": 20
+        },
+        "gemma-4-31b-it": {
+          "name": "Gemma 4 31B IT",
+          "input": 0,
+          "output": 0
+        },
+        "gemini-embedding-2": {
+          "name": "Gemini Embedding 2",
+          "input": 0.2,
+          "output": 0
+        },
+        "gemini-3.5-flash": {
+          "name": "Gemini 3.5 Flash",
+          "input": 1.5,
+          "output": 9
+        }
+      }
+    },
+    "xai": {
+      "name": "xAI",
+      "models": {
+        "grok-4.3": {
+          "name": "Grok 4.3",
+          "input": 1.25,
+          "output": 2.5
+        },
+        "grok-4.5": {
+          "name": "Grok 4.5",
+          "input": 2,
+          "output": 6
+        },
+        "grok-4.20-multi-agent-0309": {
+          "name": "Grok 4.20 Multi-Agent",
+          "input": 1.25,
+          "output": 2.5
+        },
+        "grok-4.20-0309-reasoning": {
+          "name": "Grok 4.20 (Reasoning)",
+          "input": 1.25,
+          "output": 2.5
+        },
+        "grok-4.6": {
+          "name": "Grok 4.6",
+          "input": 2,
+          "output": 6
+        },
+        "grok-4.7": {
+          "name": "Grok 4.7",
+          "input": 2,
+          "output": 6
+        },
+        "grok-4.20-0309-non-reasoning": {
+          "name": "Grok 4.20 (Non-Reasoning)",
+          "input": 1.25,
+          "output": 2.5
+        }
+      }
+    },
+    "opencode-go": {
+      "name": "OpenCode Go",
+      "models": {
+        "mimo-v2.6-flash": {
+          "name": "MiMo-V2.6-Flash",
+          "input": 0.14,
+          "output": 0.28
+        },
+        "hy3": {
+          "name": "Hy3",
+          "input": 0.14,
+          "output": 0.58
+        },
+        "claude-haiku-5-5": {
+          "name": "Claude Haiku 5.5",
+          "input": 0.1,
+          "output": 0.5
+        },
+        "qwen3.8-max": {
+          "name": "Qwen3.8 Max",
+          "input": 2,
+          "output": 6
+        },
+        "mimo-v2.6-pro": {
+          "name": "MiMo-V2.6-Pro",
+          "input": 0.435,
+          "output": 0.87
+        },
+        "muse-spark-1.3-contributor": {
+          "name": "Muse Spark 1.3 Contributor",
+          "input": 0.1,
+          "output": 0.2
+        },
+        "longcat-2.5": {
+          "name": "LongCat-2.5",
+          "input": 0.3,
+          "output": 1.2
+        },
+        "qwen3.8-flash": {
+          "name": "Qwen3.8 Flash",
+          "input": 0.15,
+          "output": 0.47
+        },
+        "deepseek-v4.1-flash": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "input": 0.15,
+          "output": 0.6
+        },
+        "gemini-4-argon-contributor": {
+          "name": "Gemini 4 Argon Contributor",
+          "input": 4,
+          "output": 20
+        },
+        "glm-5.3-flash": {
+          "name": "GLM-5.3-Flash",
+          "input": 0.15,
+          "output": 0.5
+        },
+        "crouton-alpha-free": {
+          "name": "Crouton Alpha Free",
+          "input": 0,
+          "output": 0
+        },
+        "gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna",
+          "input": 0.2,
+          "output": 1.2
+        },
+        "hy4": {
+          "name": "Hy4",
+          "input": 0.834,
+          "output": 2.501
+        },
+        "muse-spark-1.2-contributor": {
+          "name": "Muse Spark 1.2 Contributor",
+          "input": 0.1,
+          "output": 0.2
+        },
+        "minimax-m3.1-flash-free": {
+          "name": "MiniMax M3.1 Flash Free",
+          "input": 0,
+          "output": 0
+        },
+        "longcat-2.0": {
+          "name": "LongCat-2.0",
+          "input": 0.3,
+          "output": 1.2
+        },
+        "grok-4.7": {
+          "name": "Grok 4.7",
+          "input": 2,
+          "output": 6
+        },
+        "minimax-m3.1-flash": {
+          "name": "MiniMax M3.1 Flash",
+          "input": 0.15,
+          "output": 0.6
+        },
+        "longcat-2.5-free": {
+          "name": "LongCat 2.5 Free",
+          "input": 0,
+          "output": 0
+        },
+        "mimo-v2.5": {
+          "name": "MiMo V2.5",
+          "input": 0.14,
+          "output": 0.28
+        },
+        "kimi-k3": {
+          "name": "Kimi K3",
+          "input": 3,
+          "output": 15
+        },
+        "longcat-2.5-preview-free": {
+          "name": "LongCat 2.5 Preview Free",
+          "input": 0,
+          "output": 0
+        },
+        "minimax-m3": {
+          "name": "MiniMax-M3",
+          "input": 0.3,
+          "output": 1.2
+        },
+        "qwen4-max": {
+          "name": "Qwen4 Max",
+          "input": 1.5,
+          "output": 4.5
+        },
+        "beam-free": {
+          "name": "Beam Free",
+          "input": 0,
+          "output": 0
+        },
+        "gpt-6-luna": {
+          "name": "GPT-6 Luna",
+          "input": 0.1,
+          "output": 0.5
+        },
+        "cat-jam-free": {
+          "name": "Cat Jam Free",
+          "input": 0,
+          "output": 0
+        },
+        "step-5-preview": {
+          "name": "Step 5 Preview",
+          "input": 1,
+          "output": 2.7
+        },
+        "space-bunny": {
+          "name": "Space Bunny",
+          "input": 0.15,
+          "output": 0.6
+        },
+        "kimi-k3.1-pro": {
+          "name": "Kimi K3.1 Pro",
+          "input": 2,
+          "output": 10
+        },
+        "gemini-4-argon": {
+          "name": "Gemini 4 Argon",
+          "input": 2,
+          "output": 10
+        },
+        "minimax-m2.7": {
+          "name": "MiniMax-M2.7",
+          "input": 0.3,
+          "output": 1.2
+        },
+        "kimi-k2.7-code": {
+          "name": "Kimi K2.7 Code",
+          "input": 0.95,
+          "output": 4
+        },
+        "iceman-contributor-free": {
+          "name": "Iceman Contributor Free",
+          "input": 0,
+          "output": 0
+        },
+        "glm-5.2": {
+          "name": "GLM-5.2",
+          "input": 1.4,
+          "output": 4.4
+        },
+        "qwen3.7-plus": {
+          "name": "Qwen3.7 Plus",
+          "input": 0.4,
+          "output": 1.6
+        },
+        "deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro",
+          "input": 0.66,
+          "output": 1.98
+        },
+        "step-5-preview-free": {
+          "name": "Step 5 Preview Free",
+          "input": 0,
+          "output": 0
+        },
+        "glm-5.3": {
+          "name": "GLM-5.3",
+          "input": 1.4,
+          "output": 4.4
+        },
+        "hy4-preview": {
+          "name": "Hy4 preview",
+          "input": 0.834,
+          "output": 2.501
+        },
+        "hy4-flash-free": {
+          "name": "Hy4 flash Free",
+          "input": 0,
+          "output": 0
+        },
+        "mimo-v2.5-pro": {
+          "name": "MiMo V2.5 Pro",
+          "input": 0.435,
+          "output": 0.87
+        }
+      }
+    }
+  }
+}
