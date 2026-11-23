@@ -57,6 +57,10 @@ A few things worth knowing:
 | `styles.css`       | Design tokens + components (IBM Plex Mono/Sans)         |
 | `live.js`          | Direct parallel fetch (models.dev + AA), parsers, merge, cache |
 | `app.js`           | Scales, Pareto computation, SVG rendering, toggles      |
+| `subsidy.html`     | Subsidy shell — three X modes, plan arithmetic, trays   |
+| `subsidy.js`       | Subsidy merge, plan expansion, scatter, mode switching  |
+| `data/subsidy-plans.json` | Published per-model plan prices and multiples     |
+| `data/aa-subsidy-snapshot.json` | AA score/cost-per-task snapshot + models.dev fallback |
 | `tests/`           | Headless behavioral suite — runs on Node's built-in test runner |
 
 ## Tests
@@ -67,7 +71,7 @@ No dependencies, no build step — Node ≥ 18 runs them natively:
 npm test
 ```
 
-77 behavioral tests boot the real page headlessly and cover the risky edges:
+141 behavioral tests boot the real page headlessly and cover the risky edges:
 parallel origin fetching, cache honesty (TTL, tampered payloads, outage fallbacks),
 inert-text flight parsing under hostile input, Pareto ties, XSS escaping through the DOM,
 and every status-stamp state.
@@ -92,6 +96,33 @@ scored models chart smartest-first, unscored ones stay listed in the tray.
 Scores are `exact` when Artificial Analysis benchmarks that precise model;
 otherwise the bar carries the closest AA match, marked `≈` with an explicit
 note (and the worker still tries the model's own AA page to upgrade it).
+
+## Subsidy frontier
+
+[`/subsidy`](subsidy.html) compares the same models against the Artificial
+Analysis Intelligence Index through three X axes, switchable without a reload:
+
+- **Subsidized** (default) — `cost_per_task / subsidy_multiple`: the effective
+  USD per AA task once a published subscription plan is applied. One point per
+  model × plan (a model with three plans produces three points), with plan
+  name, monthly price, multiple, base cost per task and effective cost in the
+  tooltip/readout.
+- **Cost per task** — Artificial Analysis `intelligenceIndexCostPerTask.cost.total`.
+  Missing values are absent (excluded with a reason), never treated as $0.
+- **API cost** — models.dev base-tier `cost.output` (USD per 1M output tokens),
+  with base input/output shown in the readout. `cost.tiers` and
+  `cost.context_over_200k` are ignored so tiers are never mixed.
+
+The roster is strictly `anthropic`, `openai`, `google`, `xai` and
+`opencode-go`; Z.ai models enter only through `opencode-go`. Models without an
+AA score stay visible in the **Sem score AA** tray, and models without a
+published subsidy table are listed in **Sem tabela de subsídio**. Live AA
+scores still come from the worker; `data/subsidy-plans.json` holds the six
+published plan tables (collected 2026-11-23), and
+`data/aa-subsidy-snapshot.json` holds the inert-parsed AA index snapshot plus
+a `models.dev` fallback slice. The merged dataset is cached in LocalStorage
+(`mvm.subsidy.v1`, 30-minute TTL, plus `mvm.subsidy.lastgood`), so an
+unreachable worker degrades to the snapshot and then to the last clean merge.
 
 ## License
 
