@@ -1078,3 +1078,38 @@ body {
     padding: 3px 6px;
   }
 }
+
+/* ---------- subsidy page ---------- */
+
+#toggles .lab-row {
+  flex-wrap: wrap;
+}
+#toggles .chip {
+  width: auto;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+.chip-state {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  flex: 0 0 auto;
+}
+.subsidy-missing-panel {
+  max-height: 340px;
+}
+.subsidy-missing-panel .excluded-list {
+  max-height: 220px;
+}
+.subsidy-missing-panel .excluded-reason {
+  font-size: 11.5px;
+}
+
+/* The screen-reader table is absolutely positioned but a table's intrinsic
+   height can still expand the document; keep it clipped to one pixel. */
+#sr-data-table {
+  display: block;
+  max-height: 1px;
+  overflow: hidden;
+}
