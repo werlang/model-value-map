@@ -334,6 +334,12 @@ function aaRecordFromObj(o) {
   if (idx == null) return null;
   const creator = (o.creator && (o.creator.name || o.creator.slug))
     || (o.model_creator && (o.model_creator.name || o.model_creator.slug)) || null;
+  const rawCostPerTask = o.intelligenceIndexCostPerTask
+    && o.intelligenceIndexCostPerTask.cost
+    && o.intelligenceIndexCostPerTask.cost.total;
+  const costPerTask = typeof rawCostPerTask === 'number' && Number.isFinite(rawCostPerTask) && rawCostPerTask > 0
+    ? rawCostPerTask
+    : null;
   return {
     slug: o.slug,
     shortName: o.shortName,
@@ -341,6 +347,7 @@ function aaRecordFromObj(o) {
     creator,
     creatorColor: (o.creator && o.creator.color) || null,
     intelligenceIndex: Math.round(idx * 100) / 100,
+    costPerTask,
     effort: (o.effort && o.effort.label) || null,
     isOpenWeights: !!o.isOpenWeights,
     url: 'https://artificialanalysis.ai/models/' + o.slug,
@@ -944,7 +951,7 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
       ocCostPerM: cost,
       ocCost: md.cost,
       intelligenceIndex: aa.intelligenceIndex,
-      aa: { slug, name: aa.name, intelligenceIndex: aa.intelligenceIndex, effort: aa.effort, isOpenWeights: !!aa.isOpenWeights, url: aa.url },
+      aa: { slug, name: aa.name, intelligenceIndex: aa.intelligenceIndex, costPerTask: aa.costPerTask ?? null, effort: aa.effort, isOpenWeights: !!aa.isOpenWeights, url: aa.url },
       contextWindowTokens,
       reasoning,
       openWeights,
@@ -997,7 +1004,7 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
         ocCostPerM: cost,
         ocCost: md.cost,
         intelligenceIndex: aaRec.intelligenceIndex,
-        aa: { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url },
+        aa: { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, costPerTask: aaRec.costPerTask ?? null, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url },
         contextWindowTokens: md && md.limit && md.limit.context || null,
         reasoning: md ? !!md.reasoning : false,
         openWeights: md && md.openWeights != null ? md.openWeights : (aaRec ? !!aaRec.isOpenWeights : false),
@@ -1018,7 +1025,7 @@ function buildModels(mdMap, aaMap, curatedDocsIds) {
       ocCostPerM: cost,
       ocCost: md ? md.cost : null,
       intelligenceIndex: aaRec ? aaRec.intelligenceIndex : null,
-      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url } : null,
+      aa: aaRec ? { slug: aaRec.slug, name: aaRec.name || aaRec.shortName, intelligenceIndex: aaRec.intelligenceIndex, costPerTask: aaRec.costPerTask ?? null, effort: aaRec.effort || null, isOpenWeights: !!aaRec.isOpenWeights, url: aaRec.url } : null,
       contextWindowTokens: md && md.limit && md.limit.context || null,
       reasoning: md ? !!md.reasoning : false,
       openWeights: md && md.openWeights != null ? md.openWeights : (aaRec ? !!aaRec.isOpenWeights : false),
