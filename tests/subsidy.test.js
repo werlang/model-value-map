@@ -714,6 +714,123 @@ test('the lab legend hides and shows a whole lab', async () => {
   assert.equal(dotKeys(env).length, before);
 });
 
+test('toggles group by lab with the index.html chip structure', async () => {
+  const env = await makePage();
+  const groups = [...env.sb.el('toggles').querySelectorAll('.lab-group')];
+  assert.equal(groups.length, 5);
+  assert.deepEqual(
+    groups.map((g) => g.getAttribute('data-lab')),
+    ['anthropic', 'openai', 'google', 'xai', 'opencode-go'],
+  );
+  assert.deepEqual(
+    groups.map((g) => g.querySelector('.lab-name').textContent),
+    ['Anthropic', 'OpenAI', 'Google', 'xAI', 'OpenCode Go'],
+  );
+
+  groups.forEach((group) => {
+    const key = group.getAttribute('data-lab');
+    const row = group.querySelector('.lab-row');
+    assert.ok(row, key + ' lab row');
+    assert.equal(row.getAttribute('data-lab-toggle'), key);
+    assert.match(row.querySelector('.lab-swatch').getAttribute('style'), /^--lab-c:#/);
+    assert.match(row.querySelector('.lab-count').textContent, /^\d+ models?$/);
+    assert.ok(row.querySelector('.lab-state'), key + ' lab state');
+    assert.equal(row.querySelector('.lab-state').getAttribute('aria-hidden'), 'true');
+
+    const chips = group.querySelector('.chips');
+    assert.ok(chips, key + ' chips row');
+    assert.equal(chips.getAttribute('role'), 'group');
+    const buttons = chips.querySelectorAll('.chip');
+    assert.ok(buttons.length > 0, key + ' has chips');
+    buttons.forEach((chip) => {
+      assert.match(chip.querySelector('.chip-dot').getAttribute('style'), /^--chip-c:#/);
+      assert.ok(chip.querySelector('.chip-name').textContent);
+      assert.match(chip.querySelector('.chip-rank').textContent, /^\d+(\.\d)?$/);
+      assert.equal(chip.getAttribute('aria-pressed'), 'true');
+    });
+  });
+});
+
+test('lab counts reflect only models plottable in the current mode', async () => {
+  const env = await makePage();
+  const counts = () => [...env.sb.el('toggles').querySelectorAll('.lab-group')]
+    .map((g) => g.querySelector('.lab-count').textContent);
+  const chipKeys = () => [...env.sb.el('toggles').querySelectorAll('.chip')]
+    .map((c) => c.getAttribute('data-model-key'));
+
+  assert.deepEqual(counts(), ['1 model', '1 model', '1 model', '1 model', '2 models']);
+  assert.ok(!chipKeys().includes('anthropic/claude-opus-5'), 'unscored model never enters a count');
+  assert.ok(!chipKeys().includes('openai/gpt-6-luna'), 'missing cost_per_task excluded in subsidized mode');
+  assert.ok(!chipKeys().includes('opencode-go/claude-haiku-5-5'), 'missing plan excluded in subsidized mode');
+
+  const apiBtn = env.sb.document.querySelector('[data-mode="api_cost"]');
+  apiBtn.dispatch('click', { target: apiBtn });
+  assert.deepEqual(counts(), ['1 model', '2 models', '1 model', '1 model', '3 models']);
+  assert.ok(!chipKeys().includes('anthropic/claude-opus-5'));
+  assert.ok(chipKeys().includes('openai/gpt-6-luna'));
+  assert.ok(chipKeys().includes('opencode-go/claude-haiku-5-5'));
+
+  const goChips = env.sb.el('toggles').querySelector('[data-lab="opencode-go"]').querySelectorAll('.chip');
+  assert.deepEqual(
+    goChips.map((c) => c.querySelector('.chip-name').textContent),
+    ['Claude Haiku 5.5', 'DeepSeek V4.1 Flash', 'GLM-5.3'],
+    'descending intelligence, ties alphabetical',
+  );
+  assert.deepEqual(goChips.map((c) => c.querySelector('.chip-rank').textContent), ['36.5', '32.6', '31.7']);
+});
+
+test('a chip hides one model and a lab row toggles every model', async () => {
+  const env = await makePage();
+  const T = env.test;
+  const toggles = env.sb.el('toggles');
+  const chipFor = (key) => toggles.querySelectorAll('.chip')
+    .find((c) => c.getAttribute('data-model-key') === key) || null;
+  const goDots = () => dotKeys(env).filter((k) => k.startsWith('opencode-go/'));
+  const labState = () => toggles.querySelector('[data-lab="opencode-go"]').querySelector('.lab-state').textContent;
+
+  assert.equal(goDots().length, 4, 'two OpenCode Go models with two plans each');
+  let chip = chipFor('opencode-go/deepseek-v4-1-flash');
+  assert.ok(chip);
+  chip.dispatch('click', { target: chip });
+
+  chip = chipFor('opencode-go/deepseek-v4-1-flash');
+  assert.equal(chip.getAttribute('aria-pressed'), 'false');
+  assert.equal(labState(), '1/2');
+  assert.ok(!goDots().some((k) => k.startsWith('opencode-go/deepseek-v4-1-flash::')));
+  assert.ok(goDots().some((k) => k.startsWith('opencode-go/glm-5-3::')));
+  assert.equal(toggles.querySelector('.lab-row[data-lab-toggle="opencode-go"]').getAttribute('aria-pressed'), 'true');
+
+  let row = toggles.querySelector('[data-lab-toggle="opencode-go"]');
+  row.dispatch('click', { target: row });
+  assert.equal(labState(), 'off');
+  row = toggles.querySelector('[data-lab-toggle="opencode-go"]');
+  assert.equal(row.getAttribute('aria-pressed'), 'false');
+  assert.ok(toggles.querySelector('[data-lab="opencode-go"]').querySelectorAll('.chip')
+    .every((c) => c.getAttribute('aria-pressed') === 'false'));
+  assert.equal(goDots().length, 0);
+  assert.ok(T.state.hidden.has('opencode-go/glm-5-3') && T.state.hidden.has('opencode-go/deepseek-v4-1-flash'));
+
+  row.dispatch('click', { target: row });
+  assert.equal(labState(), 'all on');
+  assert.equal(toggles.querySelector('[data-lab-toggle="opencode-go"]').getAttribute('aria-pressed'), 'true');
+  assert.ok(toggles.querySelector('[data-lab="opencode-go"]').querySelectorAll('.chip')
+    .every((c) => c.getAttribute('aria-pressed') === 'true'));
+  assert.equal(goDots().length, 4);
+
+  // A hidden lab (via the legend) plus a chip click reveals only that model.
+  const legend = env.sb.el('lab-legend').querySelector('[data-legend-provider="opencode-go"]');
+  legend.dispatch('click', { target: legend });
+  assert.equal(goDots().length, 0);
+  chip = chipFor('opencode-go/glm-5-3');
+  chip.dispatch('click', { target: chip });
+  assert.ok(!T.state.hiddenProviders.has('opencode-go'));
+  assert.equal(chipFor('opencode-go/glm-5-3').getAttribute('aria-pressed'), 'true');
+  assert.equal(chipFor('opencode-go/deepseek-v4-1-flash').getAttribute('aria-pressed'), 'false');
+  assert.equal(labState(), '1/2');
+  assert.ok(goDots().length > 0);
+  assert.ok(goDots().every((k) => k.startsWith('opencode-go/glm-5-3::')));
+});
+
 test('summary counters expose plotted, no-score, no-cost and no-plan counts', async () => {
   const env = await makePage();
   const res = env.test.state.results;

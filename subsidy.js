@@ -1309,32 +1309,93 @@
   function renderToggles(results) {
     const el = $('toggles');
     if (!el) return;
-    const models = {};
-    results.allPoints.forEach(function (p) {
-      if (!models[p.modelKey]) models[p.modelKey] = { key: p.modelKey, name: p.name, provider: p.provider, providerName: p.providerName };
+    // One group per lab, in PROVIDERS order, holding one record per distinct
+    // model that is plottable in the current mode. allPoints (not points)
+    // keeps hidden models listed so they can be switched back on.
+    const labs = [];
+    PROVIDER_KEYS.forEach(function (pk) {
+      const models = {};
+      results.allPoints.forEach(function (p) {
+        if (p.provider !== pk || models[p.modelKey]) return;
+        models[p.modelKey] = {
+          key: p.modelKey,
+          name: p.name,
+          provider: p.provider,
+          providerName: p.providerName,
+          score: p.y,
+        };
+      });
+      const list = Object.keys(models).map(function (key) { return models[key]; });
+      if (!list.length) return;
+      list.sort(function (a, b) {
+        return (b.score - a.score) || String(a.name).localeCompare(String(b.name));
+      });
+      labs.push({ key: pk, name: PROVIDER_NAMES[pk] || pk, list: list });
     });
-    const keys = Object.keys(models).sort(function (a, b) {
-      return String(models[a].name).localeCompare(String(models[b].name));
-    });
-    if (!keys.length) {
+    if (!labs.length) {
       el.innerHTML = '<p class="panel-sub">Nenhum modelo plotável neste modo.</p>';
       return;
     }
-    el.innerHTML = keys.map(function (key) {
-      const m = models[key];
-      const on = !state.hidden.has(key);
-      return '<div class="lab-group"><div class="lab-row">'
-        + '<button type="button" class="chip" data-model-key="' + esc(key) + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
-        + '<span class="chip-dot" style="background:' + esc(hueFor(m.provider)) + '"></span>'
-        + '<span class="chip-name">' + esc(m.name) + '</span>'
-        + '<span class="chip-state">' + (on ? 'on' : 'off') + '</span></button>'
-        + '<span class="excluded-axis">' + esc(m.providerName) + '</span>'
-        + '</div></div>';
+    const labByKey = {};
+    labs.forEach(function (lab) { labByKey[lab.key] = lab; });
+    el.innerHTML = labs.map(function (lab) {
+      const hue = hueFor(lab.key);
+      let onN = 0;
+      const chips = lab.list.map(function (m) {
+        const on = !state.hiddenProviders.has(lab.key) && !state.hidden.has(m.key);
+        if (on) onN++;
+        const scoreText = Number.isFinite(m.score) ? String(Math.round(m.score * 10) / 10) : '';
+        return '<button type="button" class="chip" data-model-key="' + esc(m.key) + '" aria-pressed="' + (on ? 'true' : 'false') + '">'
+          + '<span class="chip-dot" style="--chip-c:' + esc(hue) + '"></span>'
+          + '<span class="chip-name">' + esc(m.name) + '</span>'
+          + '<span class="chip-rank">' + esc(scoreText) + '</span>'
+          + '</button>';
+      }).join('');
+      const stateText = onN === 0 ? 'off' : onN === lab.list.length ? 'all on' : (onN + '/' + lab.list.length);
+      return '<section class="lab-group" data-lab="' + esc(lab.key) + '">'
+        + '<button type="button" class="lab-row" data-lab-toggle="' + esc(lab.key) + '" aria-pressed="' + (onN > 0 ? 'true' : 'false') + '">'
+        + '<span class="lab-swatch" style="--lab-c:' + esc(hue) + '"></span>'
+        + '<span class="lab-name">' + esc(lab.name) + '</span>'
+        + '<span class="lab-count">' + lab.list.length + ' model' + (lab.list.length === 1 ? '' : 's') + '</span>'
+        + '<span class="lab-state" aria-hidden="true">' + esc(stateText) + '</span>'
+        + '</button>'
+        + '<div class="chips" role="group" aria-label="' + esc(lab.name) + ' models">'
+        + chips
+        + '</div>'
+        + '</section>';
     }).join('');
     el.querySelectorAll('[data-model-key]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const key = btn.getAttribute('data-model-key');
-        if (state.hidden.has(key)) state.hidden.delete(key); else state.hidden.add(key);
+        const group = btn.closest ? btn.closest('.lab-group') : null;
+        const lab = group ? labByKey[group.getAttribute('data-lab')] : null;
+        if (!lab) return;
+        if (state.hiddenProviders.has(lab.key)) {
+          state.hiddenProviders.delete(lab.key);
+          lab.list.forEach(function (m) {
+            if (m.key === key) state.hidden.delete(m.key); else state.hidden.add(m.key);
+          });
+        } else if (state.hidden.has(key)) {
+          state.hidden.delete(key);
+        } else {
+          state.hidden.add(key);
+        }
+        saveHidden();
+        render();
+      });
+    });
+    el.querySelectorAll('[data-lab-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const lab = labByKey[btn.getAttribute('data-lab-toggle')];
+        if (!lab) return;
+        const anyOn = !state.hiddenProviders.has(lab.key)
+          && lab.list.some(function (m) { return !state.hidden.has(m.key); });
+        if (anyOn) {
+          lab.list.forEach(function (m) { state.hidden.add(m.key); });
+        } else {
+          state.hiddenProviders.delete(lab.key);
+          lab.list.forEach(function (m) { state.hidden.delete(m.key); });
+        }
         saveHidden();
         render();
       });

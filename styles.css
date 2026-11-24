@@ -1081,21 +1081,6 @@ body {
 
 /* ---------- subsidy page ---------- */
 
-#toggles .lab-row {
-  flex-wrap: wrap;
-}
-#toggles .chip {
-  width: auto;
-  flex: 1 1 auto;
-  justify-content: flex-start;
-}
-.chip-state {
-  margin-left: auto;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
-  flex: 0 0 auto;
-}
 .subsidy-missing-panel {
   max-height: 340px;
 }
@@ -1156,6 +1141,7 @@ body.subsidy-page .chart-loading {
 body.subsidy-page .grid-minor { stroke: var(--grid-minor); }
 body.subsidy-page .grid-major { stroke: var(--grid-major); }
 body.subsidy-page .zone-label { fill: var(--ink-faint); }
+body.subsidy-page .chip { color: var(--ink); }
 body.subsidy-page .chip[aria-pressed="true"] { background: #1f2731; }
 body.subsidy-page .action[aria-pressed="true"],
 body.subsidy-page #scale-toggle[aria-pressed="true"],
