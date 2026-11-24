@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="subsidy-dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Model Value Map — Subsidy frontier</title>
   <meta name="description" content="AI models plotted by subsidized cost per task, AA cost per task, or API cost against the Artificial Analysis Intelligence Index. Plans and multiples from the published subsidy table." />
   <link rel="canonical" href="https://werlang.github.io/model-value-map/subsidy.html" />
-  <meta name="theme-color" content="#edf0f3" />
+  <meta name="theme-color" content="#0d1117" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Model Value Map" />
   <meta property="og:url" content="https://werlang.github.io/model-value-map/subsidy.html" />
@@ -25,7 +25,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f49e0'/%3E%3Cpath d='M6 22 L14 20 L22 10' stroke='%23fbfcfd' stroke-width='3' stroke-dasharray='5 3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="subsidy-page">
   <a class="skip-link" href="#chart-region">Skip to chart</a>
 
   <header class="masthead">
@@ -52,8 +52,10 @@
       subsidy is applied. Switch the X axis between <strong>subsidized cost</strong>
       (cost_per_task ÷ plan multiple), <strong>AA cost per task</strong>, and
       <strong>API output cost</strong> — all against the same intelligence index.
-      The dashed cobalt line is the Pareto frontier. Models without a published
-      subsidy table stay visible in the <strong>Sem tabela de subsídio</strong> block.
+      The dashed cobalt line is the Pareto frontier. Anthropic, OpenAI, Google and
+      xAI publish one lab-level plan table that every model of the lab inherits;
+      OpenCode Go publishes per-model tables only, so a Go model without its own
+      entry stays visible in the <strong>Sem tabela de subsídio</strong> block.
     </p>
   </header>
 
@@ -75,6 +77,8 @@
           <button type="button" class="action" id="scale-toggle" aria-pressed="false" title="Toggle X axis between log and linear scale">X: Log</button>
         </div>
       </div>
+      <div class="summary-counters" id="summary-counters" aria-live="polite" aria-label="Subsidy coverage counters"></div>
+      <div class="lab-legend" id="lab-legend" role="group" aria-label="Lab visibility"></div>
       <div class="chart-holder" id="chart-holder">
         <div class="chart-loading" id="chart-loading" aria-hidden="true">
           <svg class="chart-spinner" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -83,6 +87,7 @@
           </svg>
           <span class="chart-loading-text">Fetching subsidy data…</span>
         </div>
+        <div id="chart-tooltip" class="chart-tooltip" role="tooltip" hidden></div>
       </div>
       <p class="axis-note">X is log-scaled · 3 X modes: subsidized (default), cost per task, API cost</p>
     </section>
@@ -127,7 +132,7 @@
 
   <footer class="colophon">
     <div class="source-row">
-      <p><strong>Subsidy plan table</strong> — committed at <code>data/subsidy-plans.json</code>, collected 2026-11-23 from <a href="https://opencode.ai/docs/go" target="_blank" rel="noopener">opencode.ai/docs/go</a>. Only published multiples are used.</p>
+      <p><strong>Subsidy plan tables</strong> — committed at <code>data/subsidy-plans.json</code>. Anthropic, OpenAI, Google and xAI lab-level plans come from <strong>“reference chart, 2026-11-23”</strong> and are inherited by every model of the lab; OpenCode Go per-model multiples come from <a href="https://opencode.ai/docs/go" target="_blank" rel="noopener">opencode.ai/docs/go</a>, collected 2026-11-23. Only published multiples are used — never inferred.</p>
       <p><strong>AA snapshot</strong> — <code>data/aa-subsidy-snapshot.json</code>, collected 2026-11-23 from <a href="https://artificialanalysis.ai/models" target="_blank" rel="noopener">artificialanalysis.ai/models</a> (parsed as inert text).</p>
     </div>
     <p class="source-links" id="source-links">Live scores via the sanitized worker · API costs via <a href="https://models.dev/api.json" target="_blank" rel="noopener">models.dev</a> base tier (tiers ignored)</p>
@@ -135,7 +140,7 @@
       <a href="https://github.com/werlang/model-value-map" target="_blank" rel="noopener">github.com/werlang/model-value-map</a></p>
     <p class="caveat">
       Live AA scores come from the worker and are cached for 30 minutes; a merged dataset is cached in LocalStorage
-      (<code>mvm.subsidy.v1</code>) with an unexpired <code>mvm.subsidy.lastgood</code>. When the worker is unreachable,
+      (<code>mvm.subsidy.v2</code>) with an unexpired <code>mvm.subsidy.lastgood</code>. When the worker is unreachable,
       the committed AA snapshot supplies cost_per_task and the page degrades honestly. Use ⟳ to force a refresh.
     </p>
   </footer>

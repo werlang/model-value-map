@@ -1113,3 +1113,242 @@ body {
   max-height: 1px;
   overflow: hidden;
 }
+
+/* ============================================================
+   /subsidy dark theme — every token and override is scoped to
+   html.subsidy-dark / body.subsidy-page. index.html and
+   openrouter/index.html keep the light instrument aesthetic.
+   ============================================================ */
+
+html.subsidy-dark {
+  color-scheme: dark;
+  --paper: #0d1117;
+  --panel: #161b22;
+  --panel-raised: #1c2430;
+  --ink: #e6edf3;
+  --ink-dim: #a7b4c1;
+  --ink-faint: #8492a0;
+  --hairline: #30363d;
+  --grid-major: #2b3440;
+  --grid-minor: #212831;
+  --frontier: #7aa2ff;
+  --frontier-soft: rgba(122, 162, 255, 0.14);
+  --focus-ring: #7aa2ff;
+}
+
+body.subsidy-page {
+  background:
+    radial-gradient(1200px 520px at 70% -10%, rgba(122, 162, 255, 0.09), transparent),
+    var(--paper);
+  background-color: var(--paper);
+}
+
+body.subsidy-page .skip-link {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+}
+body.subsidy-page .panel { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45); }
+body.subsidy-page .chart-loading {
+  background: rgba(22, 27, 34, 0.94);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+body.subsidy-page .grid-minor { stroke: var(--grid-minor); }
+body.subsidy-page .grid-major { stroke: var(--grid-major); }
+body.subsidy-page .zone-label { fill: var(--ink-faint); }
+body.subsidy-page .chip[aria-pressed="true"] { background: #1f2731; }
+body.subsidy-page .action[aria-pressed="true"],
+body.subsidy-page #scale-toggle[aria-pressed="true"],
+body.subsidy-page .sort-btn.active,
+body.subsidy-page .sort-btn[aria-pressed="true"],
+body.subsidy-page .chart-error-retry {
+  color: #0d1117;
+}
+
+/* ---------- top counters strip ---------- */
+
+body.subsidy-page .summary-counters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+
+body.subsidy-page .summary-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: rgba(122, 162, 255, 0.05);
+}
+
+body.subsidy-page .summary-value {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+body.subsidy-page .summary-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+  overflow-wrap: break-word;
+}
+
+/* ---------- clickable lab legend ---------- */
+
+body.subsidy-page .lab-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+body.subsidy-page .lab-legend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+body.subsidy-page .lab-legend-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+}
+
+body.subsidy-page .lab-legend-btn[aria-pressed="false"] {
+  opacity: 0.42;
+  border-style: dashed;
+}
+
+body.subsidy-page .lab-legend-btn[aria-pressed="false"] .legend-name {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+body.subsidy-page .legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+body.subsidy-page .legend-name { font-weight: 600; letter-spacing: 0.03em; }
+body.subsidy-page .legend-count { font-size: 10px; color: var(--ink-faint); }
+
+/* ---------- plan trails ("trilho de planos") ---------- */
+
+body.subsidy-page .layer-trails { pointer-events: none; }
+
+body.subsidy-page .plan-trail {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-opacity: 0.26;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-opacity 140ms ease, stroke-width 140ms ease;
+}
+
+body.subsidy-page .plan-trail.is-active {
+  stroke-width: 2.6;
+  stroke-opacity: 0.95;
+}
+
+/* ---------- smart dot labels ---------- */
+
+body.subsidy-page .dot-label {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+body.subsidy-page .dot-point.frontier-member .dot-label,
+body.subsidy-page .dot-point.is-active .dot-label,
+body.subsidy-page .dot-point:hover .dot-label,
+body.subsidy-page .dot-point:focus .dot-label {
+  opacity: 1;
+}
+
+/* ---------- chart tooltip ---------- */
+
+body.subsidy-page .chart-tooltip {
+  position: absolute;
+  z-index: 7;
+  min-width: 140px;
+  max-width: min(280px, calc(100% - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: rgba(22, 27, 34, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.35;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+body.subsidy-page .chart-tooltip[hidden] { display: none; }
+
+body.subsidy-page .chart-tooltip .tt-model {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+body.subsidy-page .chart-tooltip .tt-lab {
+  margin: 1px 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+body.subsidy-page .chart-tooltip .tt-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+body.subsidy-page .chart-tooltip .tt-grid dt { color: var(--ink-faint); }
+body.subsidy-page .chart-tooltip .tt-grid dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  body.subsidy-page .summary-counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  body.subsidy-page .lab-legend-btn { font-size: 10px; padding: 3px 7px; }
+  body.subsidy-page .chart-tooltip { font-size: 11px; }
+  body.subsidy-page .summary-value { font-size: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.subsidy-page .plan-trail,
+  body.subsidy-page .dot-label { transition: none; }
+}

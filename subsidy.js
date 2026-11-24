@@ -8,9 +8,14 @@
  *
  * Live AA scores come from window.LiveData (the sanitized worker endpoint).
  * models.dev and the two committed data files are fetched directly. The
- * merged dataset is cached under mvm.subsidy.v1 (30 min TTL) plus an
+ * merged dataset is cached under mvm.subsidy.v2 (30 min TTL) plus an
  * unexpired mvm.subsidy.lastgood, so an unreachable worker degrades to the
  * AA snapshot and then to the last clean merge — never to invented values.
+ *
+ * Plan inheritance: Anthropic, OpenAI, Google and xAI publish one lab-level
+ * subscription table, so every model of those labs inherits it. OpenCode Go
+ * publishes per-model tables only — a model without its own entry is never
+ * given a lab plan and never has a multiple estimated.
  */
 (function () {
   'use strict';
@@ -18,7 +23,7 @@
   const MODELS_DEV_URL = 'https://models.dev/api.json';
   const PLANS_URL = 'data/subsidy-plans.json';
   const SNAPSHOT_URL = 'data/aa-subsidy-snapshot.json';
-  const CACHE_KEY = 'mvm.subsidy.v1';
+  const CACHE_KEY = 'mvm.subsidy.v2';
   const LASTGOOD_KEY = 'mvm.subsidy.lastgood';
   const HIDDEN_KEY = 'mvm.subsidy.hidden.v1';
   const XSCALE_KEY = 'mvm.subsidy.xscale.v1';
@@ -36,6 +41,18 @@
   PROVIDERS.forEach(function (p) { PROVIDER_NAMES[p.key] = p.name; });
 
   const MODES = ['subsidized', 'cost_per_task', 'api_cost'];
+
+  /** Labs whose subscription plans apply to every model in the lab. */
+  const LAB_PROVIDER_KEYS = ['anthropic', 'openai', 'google', 'xai'];
+
+  /** Lab colours, shared by dots, plan trails, chips and the legend. */
+  const LAB_COLORS = {
+    anthropic: '#E07A5F',
+    openai: '#38BDF8',
+    google: '#34D399',
+    xai: '#C084FC',
+    'opencode-go': '#FBBF24',
+  };
 
   function num(v) {
     return typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -100,8 +117,10 @@
         if (seen.has(dedupe)) return;
         seen.add(dedupe);
         const cost = m.cost && typeof m.cost === 'object' ? m.cost : {};
-        const input = num(cost.input);
-        const output = num(cost.output);
+        // Live models.dev nests prices under cost; the committed snapshot
+        // keeps them flat on the model object. Base tier only either way.
+        const input = num(cost.input) != null ? num(cost.input) : num(m.input);
+        const output = num(cost.output) != null ? num(cost.output) : num(m.output);
         out.push({
           id,
           name: typeof m.name === 'string' && m.name ? m.name : key,
@@ -136,22 +155,29 @@
     return out;
   }
 
-  function parsePlans(data) {
-    const raw = Array.isArray(data) ? data : (data && Array.isArray(data.entries) ? data.entries : []);
+  /** Normalize one plan row. Lab tables use `plan`, per-model tables `name`. */
+  function parsePlanList(rawPlans) {
+    const plans = [];
+    (Array.isArray(rawPlans) ? rawPlans : []).forEach(function (p) {
+      if (!p || typeof p !== 'object') return;
+      const rawName = p.name != null ? p.name : p.plan;
+      const price = num(p.price);
+      const multiple = num(p.multiple);
+      if (rawName == null || String(rawName) === '') return;
+      if (price == null || price < 0 || multiple == null || multiple <= 0) return;
+      plans.push({ name: String(rawName), price, multiple });
+    });
+    return plans;
+  }
+
+  function parsePlanEntries(raw) {
     const out = [];
-    raw.forEach(function (e) {
+    (Array.isArray(raw) ? raw : []).forEach(function (e) {
       if (!e || typeof e !== 'object') return;
       const provider = typeof e.provider === 'string' ? e.provider : '';
       const model = typeof e.model === 'string' ? e.model : '';
       if (!provider || !model || !Array.isArray(e.plans)) return;
-      const plans = [];
-      e.plans.forEach(function (p) {
-        if (!p || typeof p !== 'object') return;
-        const price = num(p.price);
-        const multiple = num(p.multiple);
-        if (!p.name || price == null || price < 0 || multiple == null || multiple <= 0) return;
-        plans.push({ name: String(p.name), price, multiple });
-      });
+      const plans = parsePlanList(e.plans);
       if (!plans.length) return;
       out.push({
         provider,
@@ -164,6 +190,45 @@
       });
     });
     return out;
+  }
+
+  function parseLabPlans(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    Object.keys(raw).forEach(function (provider) {
+      const entry = raw[provider];
+      if (!entry || typeof entry !== 'object' || !Array.isArray(entry.plans)) return;
+      const plans = parsePlanList(entry.plans);
+      if (!plans.length) return;
+      out[provider] = {
+        providerName: typeof entry.providerName === 'string' && entry.providerName
+          ? entry.providerName
+          : (PROVIDER_NAMES[provider] || provider),
+        source: typeof entry.source === 'string' ? entry.source : '',
+        collected_at: typeof entry.collected_at === 'string' ? entry.collected_at : '',
+        plans,
+      };
+    });
+    return out;
+  }
+
+  /**
+   * Accepts the committed object (`entries` + `lab_plans`), a legacy array,
+   * an object with only `entries`, or an already-parsed bundle. Always returns
+   * `{ entries, labPlans }`, so callers never special-case the shape.
+   */
+  function parsePlans(data) {
+    if (Array.isArray(data)) {
+      return { entries: parsePlanEntries(data), labPlans: {} };
+    }
+    if (!data || typeof data !== 'object') {
+      return { entries: [], labPlans: {} };
+    }
+    const entries = parsePlanEntries(data.entries);
+    const labSource = data.labPlans && typeof data.labPlans === 'object'
+      ? data.labPlans
+      : (data.lab_plans && typeof data.lab_plans === 'object' ? data.lab_plans : null);
+    return { entries, labPlans: parseLabPlans(labSource) };
   }
 
   // ---------- cross-catalog matching ----------
@@ -216,13 +281,66 @@
     return best;
   }
 
-  function makePlanIndex(planEntries) {
+  function makePlanIndex(planData) {
+    const entries = parsePlans(planData).entries;
     const byKey = new Map();
-    planEntries.forEach(function (e) {
+    entries.forEach(function (e) {
       const key = e.provider + '|' + dashNorm(e.model);
       if (!byKey.has(key)) byKey.set(key, e);
     });
-    return { entries: planEntries, byKey: byKey };
+    return { entries: entries, byKey: byKey };
+  }
+
+  /**
+   * Provider -> plan table for labs with inherited plans. Prefers `lab_plans`
+   * and falls back to that provider's first per-model entry (legacy fixtures).
+   */
+  function makeLabPlanTables(bundle) {
+    const tables = {};
+    LAB_PROVIDER_KEYS.forEach(function (provider) {
+      const lab = bundle.labPlans && bundle.labPlans[provider];
+      if (lab && lab.plans && lab.plans.length) {
+        tables[provider] = lab;
+        return;
+      }
+      for (let i = 0; i < bundle.entries.length; i++) {
+        const e = bundle.entries[i];
+        if (e.provider === provider && e.plans.length) {
+          tables[provider] = {
+            providerName: e.providerName,
+            source: e.source,
+            collected_at: e.collected_at,
+            plans: e.plans,
+          };
+          return;
+        }
+      }
+    });
+    return tables;
+  }
+
+  /**
+   * A model's own per-model table (OpenCode Go) or its inherited lab table.
+   * Never invents a plan and never crosses providers.
+   */
+  function planEntryForModel(model, aaRecord, planIndex, labTables) {
+    if (model.provider === 'opencode-go') {
+      return findPlanEntry(model.provider, model.id, planIndex)
+        || (aaRecord && findPlanEntry(model.provider, aaRecord.slug, planIndex))
+        || null;
+    }
+    const lab = labTables[model.provider];
+    if (!lab) return null;
+    return {
+      provider: model.provider,
+      providerName: lab.providerName || model.providerName,
+      model: model.id,
+      modelName: model.name,
+      source: lab.source || '',
+      collected_at: lab.collected_at || '',
+      plans: lab.plans,
+      inherited: true,
+    };
   }
 
   function findPlanEntry(provider, id, index) {
@@ -311,9 +429,10 @@
     const snapshotRows = Array.isArray(options.snapshotModels)
       ? options.snapshotModels
       : parseSnapshot(options.snapshot || null);
-    const planEntries = Array.isArray(options.plans) ? options.plans : parsePlans(options.plans || null);
+    const planBundle = parsePlans(options.plans || null);
     const aaIndex = makeAaIndex(snapshotRows);
-    const planIndex = makePlanIndex(planEntries);
+    const planIndex = makePlanIndex(planBundle);
+    const labTables = makeLabPlanTables(planBundle);
     const workerIndex = makeWorkerIndex(options.workerModels || []);
 
     const models = catalog.map(function (m) {
@@ -327,8 +446,7 @@
       if (liveScore != null) { score = liveScore; scoreSource = 'live'; }
       const liveCpt = workerCostPerTask(worker);
       if (liveCpt != null) { cpt = liveCpt; costTaskSource = 'live'; }
-      const planEntry = findPlanEntry(m.provider, m.id, planIndex)
-        || (aa && findPlanEntry(m.provider, aa.slug, planIndex));
+      const planEntry = planEntryForModel(m, aa, planIndex, labTables);
       return {
         id: m.id,
         key: m.provider + '/' + dashNorm(m.id),
@@ -352,7 +470,9 @@
 
     return {
       models,
-      plans: planEntries,
+      // Parsed bundle: both per-model entries and lab-level tables survive the
+      // cache round-trip, so offline lastgood renders the same inheritance.
+      plans: planBundle,
       meta: {
         source: options.snapshot && options.snapshot.source ? options.snapshot.source : 'https://artificialanalysis.ai/models',
         collected_at: options.snapshot && options.snapshot.collected_at ? options.snapshot.collected_at : '',
@@ -387,33 +507,50 @@
     };
   }
 
-  function buildPoints(dataset, mode, providerFilter, hiddenSet) {
+  function emptyProviderCounts() {
+    return { total: 0, scored: 0, plottedModels: 0, plottedPoints: 0, noScore: 0, noCostPerTask: 0, noPlan: 0 };
+  }
+
+  function buildPoints(dataset, mode, providerFilter, hiddenSet, hiddenProviderSet) {
     const result = {
       mode,
       points: [],
       allPoints: [],
       excluded: [],
       noPlan: [],
+      plottedModelCount: 0,
       noScoreCount: 0,
+      noCostPerTaskCount: 0,
       modelCount: 0,
+      byProvider: {},
     };
+    PROVIDER_KEYS.forEach(function (pk) { result.byProvider[pk] = emptyProviderCounts(); });
     if (!dataset || !Array.isArray(dataset.models)) return result;
     const hidden = hiddenSet instanceof Set ? hiddenSet : new Set();
+    const hiddenProviders = hiddenProviderSet instanceof Set ? hiddenProviderSet : new Set();
     const wantedMode = MODES.indexOf(mode) >= 0 ? mode : 'subsidized';
+    result.mode = wantedMode;
     const models = dataset.models.filter(function (m) {
       return !providerFilter || providerFilter === 'all' || m.provider === providerFilter;
     });
     result.modelCount = models.length;
 
     models.forEach(function (m) {
-      const hasPlan = m.plans.length > 0;
-      if (!hasPlan) result.noPlan.push(m);
+      const counts = result.byProvider[m.provider] || null;
+      if (counts) counts.total++;
+      const hasPlan = Array.isArray(m.plans) && m.plans.length > 0;
+      if (!hasPlan) {
+        result.noPlan.push(m);
+        if (counts) counts.noPlan++;
+      }
       const score = num(m.intelligenceIndex);
       if (score == null) {
         result.noScoreCount++;
+        if (counts) counts.noScore++;
         result.excluded.push({ model: m, reason: 'Sem score AA' });
         return;
       }
+      if (counts) counts.scored++;
       const base = {
         modelKey: modelKey(m),
         id: m.id,
@@ -448,13 +585,19 @@
             result.allPoints.push(point);
           });
         }
-        if (!emitted) result.excluded.push({ model: m, reason: 'Sem cost_per_task AA' });
+        if (!emitted) {
+          result.noCostPerTaskCount++;
+          if (counts) counts.noCostPerTask++;
+          result.excluded.push({ model: m, reason: 'Sem cost_per_task AA' });
+        }
         return;
       }
 
       if (wantedMode === 'cost_per_task') {
         const cpt = num(m.costPerTask);
         if (cpt == null || cpt <= 0) {
+          result.noCostPerTaskCount++;
+          if (counts) counts.noCostPerTask++;
           result.excluded.push({ model: m, reason: 'Sem cost_per_task AA' });
           return;
         }
@@ -483,7 +626,23 @@
       }));
     });
 
-    result.points = result.allPoints.filter(function (p) { return !hidden.has(p.modelKey); });
+    result.points = result.allPoints.filter(function (p) {
+      return !hidden.has(p.modelKey) && !hiddenProviders.has(p.provider);
+    });
+    const plottedModels = new Set();
+    result.points.forEach(function (p) {
+      plottedModels.add(p.modelKey);
+      const counts = result.byProvider[p.provider];
+      if (counts) counts.plottedPoints++;
+    });
+    // Count distinct plotted models per provider (lab) without a second pass
+    // over every point.
+    plottedModels.forEach(function (key) {
+      const provider = key.slice(0, key.lastIndexOf('/'));
+      const counts = result.byProvider[provider];
+      if (counts) counts.plottedModels++;
+    });
+    result.plottedModelCount = plottedModels.size;
     return result;
   }
 
@@ -566,6 +725,7 @@
     results: null,
     activeKey: null,
     hidden: loadHidden(),
+    hiddenProviders: new Set(),
     stamp: 'loading',
     sources: { worker: null, modelsDev: null, snapshot: null, plans: null },
     lastError: false,
@@ -761,7 +921,7 @@
   }
 
   function visibleResults() {
-    return buildPoints(state.dataset, state.mode, state.provider, state.hidden);
+    return buildPoints(state.dataset, state.mode, state.provider, state.hidden, state.hiddenProviders);
   }
 
   function modeLabel() {
@@ -810,11 +970,14 @@
     const holder = $('chart-holder');
     if (!holder) return;
     const loading = $('chart-loading');
+    const tooltip = $('chart-tooltip');
+    hideTooltip();
     const w = Math.max(280, Math.round(holder.clientWidth) || 760);
     const h = holder.clientHeight > 100 ? holder.clientHeight : Math.round(Math.min(660, Math.max(380, w * 0.56)));
     const points = results.points;
     const frontier = frontierOf(points);
     const frontierKeys = new Set(frontier.map(function (p) { return p.key; }));
+    const frontierRank = new Map(frontier.map(function (p, i) { return [p.key, i]; }));
     const { xd, yd, xt, yt } = computeDomains(points, state.xScale);
     const M = { top: 26, right: 24, bottom: 46, left: 58 };
     const iw = w - M.left - M.right;
@@ -836,14 +999,15 @@
 
     const defs = svgEl('defs');
     defs.innerHTML = '<pattern id="hatch" patternUnits="userSpaceOnUse" width="7" height="7">'
-      + '<path d="M0 7 L7 0" stroke="#1f49e0" stroke-opacity="0.10" stroke-width="1"/></pattern>';
+      + '<path d="M0 7 L7 0" stroke="#7aa2ff" stroke-opacity="0.16" stroke-width="1"/></pattern>';
     svg.appendChild(defs);
 
     const gGrid = svgEl('g');
     const gZone = svgEl('g');
     const gAxes = svgEl('g');
+    const gTrails = svgEl('g', 'layer-trails');
     const gDots = svgEl('g', 'layer-dots');
-    svg.append(gGrid, gZone, gAxes, gDots);
+    svg.append(gGrid, gZone, gAxes, gTrails, gDots);
 
     function line(parent, x1, y1, x2, y2, cls) {
       const l = svgEl('line', cls);
@@ -904,6 +1068,30 @@
       gZone.append(halo, path);
     }
 
+    // Plan trails ("trilho de planos") exist only in subsidized mode: one
+    // thin line per model joining its plan points in ascending plan price.
+    if (state.mode === 'subsidized') {
+      const byModel = new Map();
+      points.forEach(function (p) {
+        if (!byModel.has(p.modelKey)) byModel.set(p.modelKey, []);
+        byModel.get(p.modelKey).push(p);
+      });
+      byModel.forEach(function (list, key) {
+        if (list.length < 2) return;
+        const ordered = list.slice().sort(function (a, b) {
+          return (a.planPrice - b.planPrice) || (a.x - b.x) || String(a.planName).localeCompare(String(b.planName));
+        });
+        const d = ordered.map(function (p, i) { return (i ? 'L' : 'M') + x(p.x) + ',' + y(p.y); }).join('');
+        const trail = svgEl('path', 'plan-trail');
+        trail.setAttribute('d', d);
+        trail.setAttribute('data-model-key', key);
+        trail.setAttribute('stroke', hueFor(ordered[0].provider));
+        trail.setAttribute('fill', 'none');
+        trail.setAttribute('aria-hidden', 'true');
+        gTrails.appendChild(trail);
+      });
+    }
+
     points.forEach(function (p, idx) {
       const cx = x(p.x);
       const cy = y(p.y);
@@ -913,6 +1101,10 @@
       g.setAttribute('role', 'img');
       g.dataset.key = p.key;
       g.dataset.id = p.modelKey;
+      g.setAttribute('data-cx', String(cx));
+      g.setAttribute('data-cy', String(cy));
+      g.setAttribute('data-vw', String(w));
+      g.setAttribute('data-vh', String(h));
       g.setAttribute('transform', 'translate(' + cx + ',' + cy + ')');
 
       let aria;
@@ -947,12 +1139,17 @@
       ring.setAttribute('r', (r + 4.5).toFixed(1));
       g.append(mark, ring);
 
-      if (w >= 640 && points.length <= 6) {
-        const label = state.mode === 'subsidized'
-          ? (p.name + ' · ' + p.planName).slice(0, 28)
-          : p.name.slice(0, 26);
-        text(g, 11, -8, label, 'dot-label', 'start');
-      }
+      // Smart labels: every dot carries one; CSS reveals only frontier and
+      // active/hovered/focused labels so the chart stays legible. Labels near
+      // the right edge flip to the left, and frontier labels alternate above
+      // and below the dot to reduce collisions.
+      const label = state.mode === 'subsidized'
+        ? (p.name + ' · ' + p.planName).slice(0, 28)
+        : p.name.slice(0, 26);
+      const nearRight = cx > M.left + iw * 0.72;
+      const rank = onF ? frontierRank.get(p.key) : -1;
+      const labelY = onF ? (rank % 2 === 0 ? -10 : 15) : -8;
+      text(g, nearRight ? -11 : 11, labelY, label, 'dot-label', nearRight ? 'end' : 'start');
 
       g.addEventListener('pointerenter', function () { setActive(p.key); });
       g.addEventListener('pointerleave', function () { setActive(null); });
@@ -965,42 +1162,111 @@
     svg.addEventListener('click', function () { setActive(null); });
     holder.replaceChildren(svg);
     if (loading) holder.appendChild(loading);
+    if (tooltip) holder.appendChild(tooltip);
   }
 
-  const HUES = ['#3B5BDB', '#D9480F', '#0CA678', '#9C36B5', '#0C8599'];
   function hueFor(provider) {
-    const idx = PROVIDER_KEYS.indexOf(provider);
-    return HUES[idx >= 0 ? idx : 0];
+    return LAB_COLORS[provider] || '#8593A8';
+  }
+
+  function tooltipHtml(point) {
+    function row(label, value) {
+      return '<div><dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd></div>';
+    }
+    let rows;
+    if (state.mode === 'subsidized') {
+      rows = row('Score AA', String(point.y))
+        + row('Plano', point.planName)
+        + row('Preço', fmtPrice(point.planPrice))
+        + row('Múltiplo', point.multiple + '×')
+        + row('cost_per_task', fmtMoney(point.baseCostPerTask))
+        + row('Custo efetivo / task', fmtMoney(point.effectiveCostPerTask));
+    } else if (state.mode === 'cost_per_task') {
+      rows = row('Score AA', String(point.y))
+        + row('cost_per_task', fmtMoney(point.x));
+    } else {
+      rows = row('Score AA', String(point.y))
+        + row('API output / 1M', fmtMoney(point.apiOutput))
+        + row('API input / 1M', point.apiInput == null ? '—' : fmtMoney(point.apiInput));
+    }
+    return '<p class="tt-model">' + esc(point.name) + '</p>'
+      + '<p class="tt-lab">' + esc(point.providerName) + '</p>'
+      + '<dl class="tt-grid">' + rows + '</dl>';
+  }
+
+  function showTooltip(point, g) {
+    const tip = $('chart-tooltip');
+    const holder = $('chart-holder');
+    if (!tip || !holder) return;
+    tip.innerHTML = tooltipHtml(point);
+    tip.removeAttribute('hidden');
+    const hw = Math.max(1, holder.clientWidth || 760);
+    const vw = Number(g.getAttribute('data-vw')) || hw;
+    const vh = Number(g.getAttribute('data-vh')) || Math.round(hw * 0.56);
+    const scale = hw / vw;
+    const cx = (Number(g.getAttribute('data-cx')) || 0) * scale;
+    const cy = (Number(g.getAttribute('data-cy')) || 0) * scale;
+    const tw = tip.offsetWidth || Math.min(260, Math.max(120, hw - 16));
+    const th = tip.offsetHeight || 150;
+    const hh = holder.clientHeight || Math.round(vh * scale);
+    const margin = 8;
+    let left = cx + 14;
+    if (left + tw > hw - margin) left = cx - tw - 14;
+    left = Math.max(margin, Math.min(left, Math.max(margin, hw - tw - margin)));
+    let top = cy - th - 12;
+    if (top < margin) top = cy + 16;
+    top = Math.max(margin, Math.min(top, Math.max(margin, hh - th - margin)));
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function hideTooltip() {
+    const tip = $('chart-tooltip');
+    if (!tip) return;
+    tip.setAttribute('hidden', '');
+    tip.innerHTML = '';
   }
 
   function setActive(key) {
     state.activeKey = key;
     const holder = $('chart-holder');
+    let activeEl = null;
     if (holder) {
       holder.querySelectorAll('.dot-point.is-active').forEach(function (g) { g.classList.remove('is-active'); });
       if (key) {
         holder.querySelectorAll('.dot-point').forEach(function (g) {
-          if (g.dataset.key === key) g.classList.add('is-active');
+          if (g.dataset.key === key) {
+            g.classList.add('is-active');
+            activeEl = g;
+          }
         });
       }
+      holder.querySelectorAll('.plan-trail').forEach(function (path) {
+        const match = activeEl && path.getAttribute('data-model-key') === activeEl.dataset.id;
+        if (match) path.classList.add('is-active');
+        else path.classList.remove('is-active');
+      });
     }
     const point = key && state.results
       ? state.results.points.filter(function (p) { return p.key === key; })[0]
       : null;
     renderReadout(point || null);
+    if (point && activeEl) showTooltip(point, activeEl);
+    else hideTooltip();
   }
 
   function renderReadout(point) {
     const el = $('readout');
     if (!el) return;
     if (!point) {
-      const res = state.results || { points: [], noScoreCount: 0, noPlan: [] };
+      const res = state.results || { points: [], noScoreCount: 0, noCostPerTaskCount: 0, noPlan: [] };
       el.innerHTML = '<h3 class="readout-empty-title">Reading the subsidy map</h3>'
         + '<p class="readout-lede">' + esc(modeLabel()) + ' on X, Artificial Analysis Intelligence Index on Y. '
         + 'Hover or focus a dot for the full plan arithmetic. The dashed cobalt line is the Pareto frontier.</p>'
         + '<ul class="readout-members">'
         + '<li><span class="m-name">Pontos plotados</span><span class="m-vals">' + res.points.length + '</span></li>'
         + '<li><span class="m-name">Sem score AA</span><span class="m-vals">' + res.noScoreCount + '</span></li>'
+        + '<li><span class="m-name">Sem cost_per_task</span><span class="m-vals">' + res.noCostPerTaskCount + '</span></li>'
         + '<li><span class="m-name">Sem tabela de subsídio</span><span class="m-vals">' + res.noPlan.length + '</span></li>'
         + '</ul>';
       return;
@@ -1105,6 +1371,62 @@
     });
   }
 
+  function labCounts() {
+    const out = {};
+    PROVIDER_KEYS.forEach(function (pk) { out[pk] = { total: 0, scored: 0 }; });
+    const models = state.dataset && Array.isArray(state.dataset.models) ? state.dataset.models : [];
+    models.forEach(function (m) {
+      const c = out[m.provider];
+      if (!c) return;
+      c.total++;
+      if (num(m.intelligenceIndex) != null) c.scored++;
+    });
+    return out;
+  }
+
+  function renderLegend() {
+    const el = $('lab-legend');
+    if (!el) return;
+    const counts = labCounts();
+    el.innerHTML = PROVIDERS.map(function (p) {
+      const c = counts[p.key] || { total: 0, scored: 0 };
+      const on = !state.hiddenProviders.has(p.key);
+      return '<button type="button" class="lab-legend-btn" data-legend-provider="' + esc(p.key) + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '">'
+        + '<span class="legend-swatch" style="background:' + esc(hueFor(p.key)) + '" aria-hidden="true"></span>'
+        + '<span class="legend-name">' + esc(p.name) + '</span>'
+        + '<span class="legend-count">' + c.scored + '/' + c.total + ' com score</span>'
+        + '</button>';
+    }).join('');
+    el.querySelectorAll('[data-legend-provider]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const key = btn.getAttribute('data-legend-provider');
+        if (state.hiddenProviders.has(key)) state.hiddenProviders.delete(key);
+        else state.hiddenProviders.add(key);
+        render();
+      });
+    });
+  }
+
+  function summaryCounter(value, label) {
+    return '<div class="summary-counter">'
+      + '<span class="summary-value">' + esc(String(value)) + '</span>'
+      + '<span class="summary-label">' + esc(label) + '</span>'
+      + '</div>';
+  }
+
+  function renderSummary(results) {
+    const el = $('summary-counters');
+    if (!el) return;
+    const plottedLabel = state.mode === 'subsidized'
+      ? 'Modelos plotados · ' + results.points.length + ' pontos'
+      : 'Modelos plotados';
+    el.innerHTML = summaryCounter(results.plottedModelCount, plottedLabel)
+      + summaryCounter(results.noScoreCount, 'Sem score AA')
+      + summaryCounter(results.noCostPerTaskCount, 'Sem cost_per_task')
+      + summaryCounter(results.noPlan.length, 'OpenCode Go sem tabela');
+  }
+
   function renderCount(results) {
     const el = $('visible-count');
     if (!el) return;
@@ -1156,6 +1478,8 @@
     }
     const results = visibleResults();
     state.results = results;
+    renderSummary(results);
+    renderLegend();
     renderChart(results);
     renderReadout(state.activeKey
       ? results.points.filter(function (p) { return p.key === state.activeKey; })[0] || null
@@ -1224,11 +1548,38 @@
     if (refresh) refresh.addEventListener('click', function () { loadData(true); });
   }
 
+  /** Redraw when the chart container changes width so text never stretches. */
+  function watchResize() {
+    const holder = $('chart-holder');
+    if (!holder) return;
+    if (typeof ResizeObserver === 'function') {
+      let raf = 0;
+      let lastW = 0;
+      const ro = new ResizeObserver(function () {
+        const w = Math.round(holder.clientWidth);
+        if (!w || w === lastW) return;
+        lastW = w;
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+        if (typeof requestAnimationFrame === 'function') {
+          raf = requestAnimationFrame(function () { render(); });
+        } else {
+          render();
+        }
+      });
+      ro.observe(holder);
+      return;
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', function () { render(); });
+    }
+  }
+
   function boot() {
     if (typeof document === 'undefined' || !$('chart-holder')) return;
     bindUI();
     syncProviderUI();
     syncModeUI();
+    watchResize();
     setChartLoading(true);
     loadData(false);
   }
@@ -1240,8 +1591,12 @@
     parseModelsDevCatalog,
     parseSnapshot,
     parsePlans,
+    parsePlanList,
     makeAaIndex,
     findAaRecord,
+    makePlanIndex,
+    makeLabPlanTables,
+    planEntryForModel,
     findPlanEntry,
     buildDataset,
     snapshotFromDataset,
@@ -1253,11 +1608,15 @@
     fmtMoney,
     fmtPrice,
     esc,
+    tooltipHtml,
+    hideTooltip,
+    setActive,
     MODEL_DEV_URL: MODELS_DEV_URL,
     CACHE_KEY,
     LASTGOOD_KEY,
     MODES,
     PROVIDERS: PROVIDER_KEYS,
+    LAB_COLORS,
     state,
     setMode,
     setProvider,
