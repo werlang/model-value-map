@@ -59,7 +59,7 @@ A few things worth knowing:
 | `app.js`           | Scales, Pareto computation, SVG rendering, toggles      |
 | `subsidy.html`     | Subsidy shell — three X modes, plan arithmetic, trays   |
 | `subsidy.js`       | Subsidy merge, plan expansion, scatter, mode switching  |
-| `data/subsidy-plans.json` | Published per-model plan prices and multiples     |
+| `data/subsidy-plans.json` | Lab-level and per-model plan prices and multiples |
 | `data/aa-subsidy-snapshot.json` | AA score/cost-per-task snapshot + models.dev fallback |
 | `tests/`           | Headless behavioral suite — runs on Node's built-in test runner |
 
@@ -106,7 +106,9 @@ Analysis Intelligence Index through three X axes, switchable without a reload:
   USD per AA task once a published subscription plan is applied. One point per
   model × plan (a model with three plans produces three points), with plan
   name, monthly price, multiple, base cost per task and effective cost in the
-  tooltip/readout.
+  tooltip/readout. Anthropic, OpenAI, Google and xAI publish one lab-level plan
+  table that every model of the lab inherits; OpenCode Go publishes per-model
+  tables only, so a Go model without its own entry gets no plan at all.
 - **Cost per task** — Artificial Analysis `intelligenceIndexCostPerTask.cost.total`.
   Missing values are absent (excluded with a reason), never treated as $0.
 - **API cost** — models.dev base-tier `cost.output` (USD per 1M output tokens),
@@ -117,11 +119,12 @@ The roster is strictly `anthropic`, `openai`, `google`, `xai` and
 `opencode-go`; Z.ai models enter only through `opencode-go`. Models without an
 AA score stay visible in the **Sem score AA** tray, and models without a
 published subsidy table are listed in **Sem tabela de subsídio**. Live AA
-scores still come from the worker; `data/subsidy-plans.json` holds the six
-published plan tables (collected 2026-11-23), and
+scores still come from the worker; `data/subsidy-plans.json` holds the
+lab-level tables for the four labs plus the two published OpenCode Go
+per-model tables (collected 2026-11-23), and
 `data/aa-subsidy-snapshot.json` holds the inert-parsed AA index snapshot plus
 a `models.dev` fallback slice. The merged dataset is cached in LocalStorage
-(`mvm.subsidy.v1`, 30-minute TTL, plus `mvm.subsidy.lastgood`), so an
+(`mvm.subsidy.v2`, 30-minute TTL, plus `mvm.subsidy.lastgood`), so an
 unreachable worker degrades to the snapshot and then to the last clean merge.
 
 ## License
