@@ -1251,24 +1251,6 @@ body.subsidy-page .legend-swatch {
 body.subsidy-page .legend-name { font-weight: 600; letter-spacing: 0.03em; }
 body.subsidy-page .legend-count { font-size: 10px; color: var(--ink-faint); }
 
-/* ---------- plan trails ("trilho de planos") ---------- */
-
-body.subsidy-page .layer-trails { pointer-events: none; }
-
-body.subsidy-page .plan-trail {
-  fill: none;
-  stroke-width: 1.5;
-  stroke-opacity: 0.26;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: stroke-opacity 140ms ease, stroke-width 140ms ease;
-}
-
-body.subsidy-page .plan-trail.is-active {
-  stroke-width: 2.6;
-  stroke-opacity: 0.95;
-}
-
 /* ---------- smart dot labels ---------- */
 
 body.subsidy-page .dot-label {
@@ -1349,6 +1331,5 @@ body.subsidy-page .chart-tooltip .tt-grid dd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.subsidy-page .plan-trail,
   body.subsidy-page .dot-label { transition: none; }
 }

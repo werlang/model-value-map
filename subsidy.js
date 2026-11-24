@@ -45,7 +45,7 @@
   /** Labs whose subscription plans apply to every model in the lab. */
   const LAB_PROVIDER_KEYS = ['anthropic', 'openai', 'google', 'xai'];
 
-  /** Lab colours, shared by dots, plan trails, chips and the legend. */
+  /** Lab colours, shared by dots, chips and the legend. */
   const LAB_COLORS = {
     anthropic: '#E07A5F',
     openai: '#38BDF8',
@@ -1005,9 +1005,8 @@
     const gGrid = svgEl('g');
     const gZone = svgEl('g');
     const gAxes = svgEl('g');
-    const gTrails = svgEl('g', 'layer-trails');
     const gDots = svgEl('g', 'layer-dots');
-    svg.append(gGrid, gZone, gAxes, gTrails, gDots);
+    svg.append(gGrid, gZone, gAxes, gDots);
 
     function line(parent, x1, y1, x2, y2, cls) {
       const l = svgEl('line', cls);
@@ -1066,30 +1065,6 @@
       path.setAttribute('d', d);
       path.setAttribute('stroke-dasharray', '7 5');
       gZone.append(halo, path);
-    }
-
-    // Plan trails ("trilho de planos") exist only in subsidized mode: one
-    // thin line per model joining its plan points in ascending plan price.
-    if (state.mode === 'subsidized') {
-      const byModel = new Map();
-      points.forEach(function (p) {
-        if (!byModel.has(p.modelKey)) byModel.set(p.modelKey, []);
-        byModel.get(p.modelKey).push(p);
-      });
-      byModel.forEach(function (list, key) {
-        if (list.length < 2) return;
-        const ordered = list.slice().sort(function (a, b) {
-          return (a.planPrice - b.planPrice) || (a.x - b.x) || String(a.planName).localeCompare(String(b.planName));
-        });
-        const d = ordered.map(function (p, i) { return (i ? 'L' : 'M') + x(p.x) + ',' + y(p.y); }).join('');
-        const trail = svgEl('path', 'plan-trail');
-        trail.setAttribute('d', d);
-        trail.setAttribute('data-model-key', key);
-        trail.setAttribute('stroke', hueFor(ordered[0].provider));
-        trail.setAttribute('fill', 'none');
-        trail.setAttribute('aria-hidden', 'true');
-        gTrails.appendChild(trail);
-      });
     }
 
     points.forEach(function (p, idx) {
@@ -1241,11 +1216,6 @@
           }
         });
       }
-      holder.querySelectorAll('.plan-trail').forEach(function (path) {
-        const match = activeEl && path.getAttribute('data-model-key') === activeEl.dataset.id;
-        if (match) path.classList.add('is-active');
-        else path.classList.remove('is-active');
-      });
     }
     const point = key && state.results
       ? state.results.points.filter(function (p) { return p.key === key; })[0]

@@ -677,46 +677,18 @@ test('committed plans file records lab and OpenCode Go provenance honestly', () 
 
 // ---------- 10. visual upgrades + offline api_cost ----------
 
-test('plan trails render only in subsidized mode and sit behind the dots', async () => {
+test('no plan trail lines render in any mode', async () => {
   const env = await makePage();
   const holder = env.sb.el('chart-holder');
-  const trails = [...holder.querySelectorAll('.plan-trail')];
-  assert.ok(trails.length > 0, 'subsidized mode draws plan trails');
-  const opus = trails.find((t) => t.getAttribute('data-model-key') === 'anthropic/claude-opus-5-5');
-  assert.ok(opus, 'one trail per model with at least two plan points');
-  assert.equal(opus.getAttribute('fill'), 'none');
-  assert.equal(opus.getAttribute('stroke'), '#E07A5F');
-  assert.equal((opus.getAttribute('d').match(/L/g) || []).length, 2, 'three plans → three vertices');
-
-  const trailGroup = holder.querySelector('svg .layer-trails');
-  const dotGroup = holder.querySelector('svg .layer-dots');
-  assert.ok(trailGroup && dotGroup);
-  const groups = holder.querySelector('svg').children.filter((c) => c.tagName === 'g');
-  assert.ok(groups.indexOf(trailGroup) < groups.indexOf(dotGroup), 'trails render before dots');
-
   const clickMode = (mode) => {
     const btn = env.sb.document.querySelector(`[data-mode="${mode}"]`);
     btn.dispatch('click', { target: btn });
   };
-  clickMode('cost_per_task');
-  assert.equal(holder.querySelectorAll('.plan-trail').length, 0);
-  clickMode('api_cost');
-  assert.equal(holder.querySelectorAll('.plan-trail').length, 0);
-  clickMode('subsidized');
-  assert.ok(holder.querySelectorAll('.plan-trail').length > 0);
-});
-
-test('focusing a dot highlights its plan trail', async () => {
-  const env = await makePage();
-  const holder = env.sb.el('chart-holder');
-  const dot = [...holder.querySelectorAll('.dot-point')].find((d) => d.dataset.key === 'anthropic/claude-opus-5-5::Pro');
-  assert.ok(dot);
-  dot.dispatch('focus');
-  const active = [...holder.querySelectorAll('.plan-trail.is-active')];
-  assert.equal(active.length, 1);
-  assert.equal(active[0].getAttribute('data-model-key'), 'anthropic/claude-opus-5-5');
-  dot.dispatch('blur');
-  assert.equal(holder.querySelectorAll('.plan-trail.is-active').length, 0);
+  for (const mode of ['subsidized', 'cost_per_task', 'api_cost']) {
+    clickMode(mode);
+    assert.equal(holder.querySelectorAll('.plan-trail').length, 0, mode + ' draws no plan trails');
+    assert.equal(holder.querySelectorAll('.layer-trails').length, 0, mode + ' has no trail layer');
+  }
 });
 
 test('the lab legend hides and shows a whole lab', async () => {
@@ -784,7 +756,6 @@ test('chart tooltip carries the plan arithmetic and escapes hostile names', asyn
   assert.match(html, /64×/);
   assert.match(html, /Custo efetivo \/ task/);
   assert.ok(holder.querySelector('#chart-tooltip'), 'tooltip survives the chart re-render');
-  assert.equal(holder.querySelectorAll('.plan-trail.is-active').length, 1);
 
   dot.dispatch('blur');
   assert.equal(tip.getAttribute('hidden'), '');
