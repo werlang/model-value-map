@@ -1,14 +1,57 @@
 {
-  "source": "https://opencode.ai/docs/go",
+  "source": "reference chart, 2026-11-23 (Anthropic, OpenAI, Google, xAI lab plans); https://opencode.ai/docs/go (OpenCode Go per-model entries)",
   "collected_at": "2026-11-23",
-  "notes": "Published per-model subscription subsidy multiples. Only the six models below have a published table; all other OpenCode Go models intentionally have no plan entry and are listed in the page's \"Sem tabela de subsídio\" block. Multiples and prices are recorded exactly as published on 2026-11-23 — never inferred.",
+  "notes": "Two published sources. Lab-level subscription tables for Anthropic, OpenAI, Google and xAI come from the reference chart dated 2026-11-23; every model of those labs inherits its lab's plan table, so a model does not need its own entry. OpenCode Go multiples are per-model and come from https://opencode.ai/docs/go on 2026-11-23; only the two OpenCode Go models below have a published table and every other OpenCode Go model intentionally has no plan entry, staying out of subsidized mode and appearing in the page's \"Sem tabela de subsídio\" block. Multiples and prices are recorded exactly as published — never inferred.",
+  "lab_plans": {
+    "anthropic": {
+      "providerName": "Anthropic",
+      "source": "reference chart, 2026-11-23",
+      "collected_at": "2026-11-23",
+      "plans": [
+        { "plan": "Pro", "price": 20, "multiple": 64 },
+        { "plan": "Max 5x", "price": 100, "multiple": 77 },
+        { "plan": "Ultra", "price": 200, "multiple": 66 }
+      ]
+    },
+    "openai": {
+      "providerName": "OpenAI",
+      "source": "reference chart, 2026-11-23",
+      "collected_at": "2026-11-23",
+      "plans": [
+        { "plan": "Plus", "price": 20, "multiple": 15 },
+        { "plan": "Pro 10x", "price": 100, "multiple": 30 },
+        { "plan": "Pro 20x", "price": 200, "multiple": 30 },
+        { "plan": "Pro 500", "price": 500, "multiple": 30 }
+      ]
+    },
+    "google": {
+      "providerName": "Google",
+      "source": "reference chart, 2026-11-23",
+      "collected_at": "2026-11-23",
+      "plans": [
+        { "plan": "Pro", "price": 20, "multiple": 21 },
+        { "plan": "Ultra 5x", "price": 100, "multiple": 24 },
+        { "plan": "Ultra 20x", "price": 200, "multiple": 48 }
+      ]
+    },
+    "xai": {
+      "providerName": "xAI",
+      "source": "reference chart, 2026-11-23",
+      "collected_at": "2026-11-23",
+      "plans": [
+        { "plan": "SuperGrok", "price": 30, "multiple": 11 },
+        { "plan": "Plus", "price": 100, "multiple": 13 },
+        { "plan": "Heavy", "price": 300, "multiple": 11 }
+      ]
+    }
+  },
   "entries": [
     {
       "provider": "anthropic",
       "providerName": "Anthropic",
       "model": "claude-opus-5-5",
       "modelName": "Opus 5.5",
-      "source": "https://opencode.ai/docs/go",
+      "source": "reference chart, 2026-11-23",
       "collected_at": "2026-11-23",
       "plans": [
         { "name": "Pro", "price": 20, "multiple": 64 },
@@ -21,7 +64,7 @@
       "providerName": "OpenAI",
       "model": "gpt-6.2-sol",
       "modelName": "GPT-6.2 Sol",
-      "source": "https://opencode.ai/docs/go",
+      "source": "reference chart, 2026-11-23",
       "collected_at": "2026-11-23",
       "plans": [
         { "name": "Plus", "price": 20, "multiple": 15 },
@@ -35,7 +78,7 @@
       "providerName": "Google",
       "model": "gemini-4-neon",
       "modelName": "Gemini 4 Neon",
-      "source": "https://opencode.ai/docs/go",
+      "source": "reference chart, 2026-11-23",
       "collected_at": "2026-11-23",
       "plans": [
         { "name": "Pro", "price": 20, "multiple": 21 },
@@ -48,7 +91,7 @@
       "providerName": "xAI",
       "model": "grok-4.7",
       "modelName": "Grok 4.7",
-      "source": "https://opencode.ai/docs/go",
+      "source": "reference chart, 2026-11-23",
       "collected_at": "2026-11-23",
       "plans": [
         { "name": "SuperGrok", "price": 30, "multiple": 11 },
